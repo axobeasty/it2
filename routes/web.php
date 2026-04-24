@@ -74,7 +74,15 @@ Route::get('/settings/database','App\Http\Controllers\SettingsController@databas
 Route::get('/settings/general/site/disable','App\Http\Controllers\SettingsController@disable');
 Route::get('/settings/general/site/enable','App\Http\Controllers\SettingsController@enable');
 Route::post('/settings/save','App\Http\Controllers\SettingsController@save');
+Route::post('/settings/database/save','App\Http\Controllers\SettingsController@saveDatabase');
+Route::post('/settings/database/save-remote-draft','App\Http\Controllers\SettingsController@saveRemoteDraft');
+Route::post('/settings/database/activate-profile','App\Http\Controllers\SettingsController@activateDatabaseProfile');
+Route::post('/settings/database/test-connection','App\Http\Controllers\SettingsController@testRemoteDatabaseConnection');
+Route::post('/settings/database/dry-run-init','App\Http\Controllers\SettingsController@dryRunRemoteInitialization');
+Route::post('/settings/database/initialize','App\Http\Controllers\SettingsController@initializeRemoteDatabase');
+Route::post('/settings/database/initialize-stream','App\Http\Controllers\SettingsController@initializeRemoteDatabaseStream');
 Route::post('/settings/database/migrate','App\Http\Controllers\SettingsController@migrateDatabase');
+Route::post('/settings/database/migrate-stream','App\Http\Controllers\SettingsController@migrateDatabaseStream');
 Route::get('/settings/email','App\Http\Controllers\SettingsController@email');
 
 Route::get('/inv','App\Http\Controllers\InventoryController@index');

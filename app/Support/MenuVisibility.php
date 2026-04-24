@@ -23,6 +23,7 @@ class MenuVisibility
             'canFaculties' => $user->canAccessPage('faculties_manage'),
             'canChairs' => $user->canAccessPage('chairs_manage'),
             'canSettings' => $user->canAccessPage('settings'),
+            'canSettingsDatabase' => $user->canAccessPage('settings_database'),
             'canPortfolioOwn' => $user->canAccessPage('portfolio'),
             'canPortfolioTypes' => $user->canAccessPage('portfolio_types'),
             'canPortfolioConfirm' => $user->canAccessPage('portfolio_confirm'),

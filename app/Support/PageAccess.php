@@ -19,6 +19,7 @@ class PageAccess
         'portfolio_types' => ['/portfolio/types', '/portfolio/types/add', '/portfolio/types/{id}/delete', '/portfolio/roles'],
         'portfolio_confirm' => ['/portfolio/confirm', '/portfolio/confirm/{portfolio}/approve', '/portfolio/confirm/{portfolio}/reject'],
         'settings' => ['/settings', '/settings/general', '/settings/general/site/disable', '/settings/general/site/enable', '/settings/authenticate', '/settings/email', '/settings/save'],
+        'settings_database' => ['/settings/database', '/settings/database/save', '/settings/database/migrate'],
         'notifications' => ['/notifications/mark-all-read'],
         'tasks' => ['/task/add', '/task/done', '/task/delete/{id}'],
         'password_manager' => ['/passwords', '/passwords/create', '/passwords/{id}/reveal', '/passwords/{id}/delete'],
@@ -47,6 +48,7 @@ class PageAccess
         'portfolio_types' => 'Портфолио: типы и роли',
         'portfolio_confirm' => 'Портфолио: подтверждение',
         'settings' => 'Настройки системы',
+        'settings_database' => 'Настройки БД и перенос данных',
         'notifications' => 'Уведомления',
         'tasks' => 'Задачи',
         'password_manager' => 'Менеджер паролей',
@@ -75,7 +77,7 @@ class PageAccess
             'Образование и тесты' => ['faculties_manage', 'chairs_manage', 'student_tests', 'tests_admin', 'tests_stats'],
             'Расписание' => ['schedule_my', 'schedule_constructor', 'schedule_constructor_settings'],
             'Портфолио' => ['portfolio', 'portfolio_types', 'portfolio_confirm'],
-            'Настройки и доступы' => ['settings', 'password_manager', 'maintenance_bypass'],
+            'Настройки и доступы' => ['settings', 'settings_database', 'password_manager', 'maintenance_bypass'],
         ];
 
         $result = [];

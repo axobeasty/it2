@@ -181,7 +181,7 @@
                 </li>
                 @endif
 
-                @if($canSettings)
+                @if($canSettings || $canSettingsDatabase)
                 <li class="nav-item dropdown"
                     onmouseenter="showDropdown(this)"
                     onmouseleave="hideDropdown(this)">
@@ -189,9 +189,14 @@
                         <i class="bi bi-sliders me-2 opacity-75"></i><span class="nav-text">Настройки</span>
                     </a>
                     <ul class="dropdown-menu border-0 shadow-sm rounded-3 py-2">
-                        <li><a class="dropdown-item rounded-2 mx-1" href="/settings/general" title="Основные настройки"><i class="bi bi-sliders me-2 text-primary"></i><span class="dropdown-item-label">Основные</span></a></li>
-                        <li><a class="dropdown-item rounded-2 mx-1" href="/settings/authenticate" title="Аутентификация"><i class="bi bi-lock-fill me-2 text-primary"></i><span class="dropdown-item-label">Аутентификация</span></a></li>
-                        <li><a class="dropdown-item rounded-2 mx-1" href="/settings/email" title="Настройки почты"><i class="bi bi-envelope-fill me-2 text-primary"></i><span class="dropdown-item-label">Настройки почты</span></a></li>
+                        @if($canSettings)
+                            <li><a class="dropdown-item rounded-2 mx-1" href="/settings/general" title="Основные настройки"><i class="bi bi-sliders me-2 text-primary"></i><span class="dropdown-item-label">Основные</span></a></li>
+                            <li><a class="dropdown-item rounded-2 mx-1" href="/settings/authenticate" title="Аутентификация"><i class="bi bi-lock-fill me-2 text-primary"></i><span class="dropdown-item-label">Аутентификация</span></a></li>
+                            <li><a class="dropdown-item rounded-2 mx-1" href="/settings/email" title="Настройки почты"><i class="bi bi-envelope-fill me-2 text-primary"></i><span class="dropdown-item-label">Настройки почты</span></a></li>
+                        @endif
+                        @if($canSettingsDatabase)
+                            <li><a class="dropdown-item rounded-2 mx-1" href="/settings/database" title="Настройки базы данных"><i class="bi bi-database-fill-gear me-2 text-primary"></i><span class="dropdown-item-label">Настройки БД</span></a></li>
+                        @endif
                     </ul>
                 </li>
                 @endif

@@ -16,7 +16,9 @@ return new class extends Migration
             $table->string('name');
             $table->string('inv_number')->nullable();
             $table->integer('count')->default(1);
-            $table->foreignId('inv_type_id')->references('id')->on('inv__types');
+            // Таблица inv__types создается следующей миграцией,
+            // поэтому здесь не задаем FK, чтобы migrate:fresh на MySQL не падал.
+            $table->unsignedBigInteger('inv_type_id');
             $table->boolean('is_enabled');
             $table->timestamps();
         });

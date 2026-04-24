@@ -15,8 +15,10 @@ return new class extends Migration
             $table->id();
             $table->string('file_path')->nullable();
             $table->string('description')->nullable()->default('Нет');
-            $table->foreignId('category_id')->references('id')->on('o__categories')->nullOnDelete();
-            $table->foreignId('employee_id')->references('id')->on('employees')->nullOnDelete();
+            // Таблица o__categories создается следующей миграцией,
+            // поэтому FK здесь не добавляем (иначе MySQL падает на migrate:fresh).
+            $table->unsignedBigInteger('category_id')->nullable();
+            $table->foreignId('employee_id')->nullable()->references('id')->on('employees')->nullOnDelete();
             $table->integer('status')->default(0);
             $table->string('room')->nullable();
             $table->timestamps();

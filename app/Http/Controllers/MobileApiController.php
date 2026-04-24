@@ -8,12 +8,33 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 class MobileApiController extends Controller
 {
     private const TOKEN_TTL_SECONDS = 2592000; // 30 days
+
+    public function health(): JsonResponse
+    {
+        try {
+            DB::purge('mysql_remote');
+            DB::connection('mysql_remote')->select('SELECT 1');
+
+            return response()->json([
+                'ok' => true,
+                'maintenance' => false,
+                'message' => 'Сервис доступен.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'maintenance' => true,
+                'message' => 'Сервис временно недоступен. Проводятся технические работы.',
+            ], 503);
+        }
+    }
 
     public function login(Request $request): JsonResponse
     {

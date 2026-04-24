@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('title');
             $table->string('message');
-            $table->foreignId('employee_id')->references('id')->on('employees')->nullOnDelete();
+            $table->foreignId('employee_id')->nullable()->references('id')->on('employees')->nullOnDelete();
             $table->boolean("is_read")->default(false);
             $table->timestamps();
         });

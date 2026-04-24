@@ -24,6 +24,7 @@ class RolePagePermissionSeeder extends Seeder
             'portfolio_types',
             'portfolio_confirm',
             'settings',
+            'settings_database',
             'notifications',
             'tasks',
         ];

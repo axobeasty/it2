@@ -15,11 +15,13 @@ return new class extends Migration
             $table->id();
             $table->string('number');
             $table->integer('status');
-            $table->foreignId('type_id')->constrained('portfolio_types')->onDelete('cascade');
+            // Справочники portfolio_types/portfolio_roles создаются следующими миграциями,
+            // поэтому на этапе create не добавляем внешние ключи для MySQL-совместимости.
+            $table->unsignedBigInteger('type_id');
             $table->string('file_path');
             $table->string('title');
             $table->foreignId('employee_id')->constrained()->onDelete('cascade');
-            $table->foreignId('role_id')->constrained('portfolio_roles')->onDelete('cascade');
+            $table->unsignedBigInteger('role_id');
             $table->timestamps();
         });
     }

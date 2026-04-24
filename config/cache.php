@@ -40,9 +40,11 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_CACHE_CONNECTION'),
+            // Кэш в БД держим на локальном sqlite, чтобы переключение активного профиля
+            // не роняло приложение при недоступности/пустой remote БД.
+            'connection' => env('DB_CACHE_CONNECTION', 'sqlite'),
             'table' => env('DB_CACHE_TABLE', 'cache'),
-            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION'),
+            'lock_connection' => env('DB_CACHE_LOCK_CONNECTION', 'sqlite'),
             'lock_table' => env('DB_CACHE_LOCK_TABLE'),
         ],
 

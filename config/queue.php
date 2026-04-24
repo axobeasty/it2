@@ -36,7 +36,9 @@ return [
 
         'database' => [
             'driver' => 'database',
-            'connection' => env('DB_QUEUE_CONNECTION'),
+            // Очереди в БД также фиксируем на sqlite, чтобы рабочий профиль БД
+            // можно было переключать независимо от наличия служебных таблиц на remote.
+            'connection' => env('DB_QUEUE_CONNECTION', 'sqlite'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),

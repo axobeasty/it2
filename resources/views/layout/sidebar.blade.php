@@ -424,30 +424,40 @@
             </div>
         @endif
 
-            @if($canSettings)
+            @if($canSettings || $canSettingsDatabase)
             <div>
                 <h6 class="sidebar-section-title">
                     Настройки
                 </h6>
                 <ul class="nav flex-column gap-1">
-                    <li>
-                        <a href="/settings/general" title="Основные настройки" class="nav-link sidebar-link d-flex align-items-center">
-                            <i class="bi bi-sliders me-2 text-primary"></i>
-                            <span class="fw-medium sidebar-link-text">Основные</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/settings/authenticate" title="Аутентификация" class="nav-link sidebar-link d-flex align-items-center">
-                            <i class="bi bi-lock-fill me-2 text-primary"></i>
-                            <span class="fw-medium sidebar-link-text">Аутентификация</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="/settings/email" title="Настройки почты" class="nav-link sidebar-link d-flex align-items-center">
-                            <i class="bi bi-envelope-fill me-2 text-primary"></i>
-                            <span class="fw-medium sidebar-link-text">Настройки почты</span>
-                        </a>
-                    </li>
+                    @if($canSettings)
+                        <li>
+                            <a href="/settings/general" title="Основные настройки" class="nav-link sidebar-link d-flex align-items-center">
+                                <i class="bi bi-sliders me-2 text-primary"></i>
+                                <span class="fw-medium sidebar-link-text">Основные</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/settings/authenticate" title="Аутентификация" class="nav-link sidebar-link d-flex align-items-center">
+                                <i class="bi bi-lock-fill me-2 text-primary"></i>
+                                <span class="fw-medium sidebar-link-text">Аутентификация</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/settings/email" title="Настройки почты" class="nav-link sidebar-link d-flex align-items-center">
+                                <i class="bi bi-envelope-fill me-2 text-primary"></i>
+                                <span class="fw-medium sidebar-link-text">Настройки почты</span>
+                            </a>
+                        </li>
+                    @endif
+                    @if($canSettingsDatabase)
+                        <li>
+                            <a href="/settings/database" title="Настройки БД" class="nav-link sidebar-link d-flex align-items-center">
+                                <i class="bi bi-database-fill-gear me-2 text-primary"></i>
+                                <span class="fw-medium sidebar-link-text">Настройки БД</span>
+                            </a>
+                        </li>
+                    @endif
                 </ul>
             </div>
             @endif

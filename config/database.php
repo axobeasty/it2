@@ -78,6 +78,8 @@ return [
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('DB_REMOTE_SSL_CA'),
+                PDO::ATTR_TIMEOUT => (int) env('DB_REMOTE_CONNECT_TIMEOUT', 5),
+                PDO::MYSQL_ATTR_USE_BUFFERED_QUERY => true,
             ]) : [],
         ],
 

@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 use Throwable;
@@ -37,7 +38,7 @@ class DatabaseProfileManager
         $this->clearRuntimeCaches();
     }
 
-    public function migrateBetweenProfiles(string $sourceProfile, string $targetProfile): void
+    public function migrateBetweenProfiles(string $sourceProfile, string $targetProfile, ?callable $progress = null): void
     {
         $sourceConnection = $this->connectionForProfile($sourceProfile);
         $targetConnection = $this->connectionForProfile($targetProfile);
@@ -46,18 +47,23 @@ class DatabaseProfileManager
             throw new RuntimeException('Источник и назначение миграции совпадают.');
         }
 
+        $this->notify($progress, 5, 'Проверка подключений и подготовка миграции...');
+
         // Подтягиваем структуру таблиц в целевой БД перед переносом данных.
         Artisan::call('migrate', [
             '--database' => $targetConnection,
             '--force' => true,
         ]);
+        $this->notify($progress, 20, 'Структура целевой БД актуализирована (migrate).');
 
         $sourceTables = $this->tablesForConnection($sourceConnection);
         $targetTables = $this->tablesForConnection($targetConnection);
         $tableNames = array_values(array_intersect($sourceTables, $targetTables));
+        $totalTables = max(count($tableNames), 1);
 
         DB::connection($targetConnection)->beginTransaction();
         try {
+            $processed = 0;
             foreach ($tableNames as $tableName) {
                 if ($this->shouldSkipTable($tableName)) {
                     continue;
@@ -74,13 +80,91 @@ class DatabaseProfileManager
                         DB::connection($targetConnection)->table($tableName)->insert($chunk);
                     }
                 }
+
+                $processed++;
+                $percent = 20 + (int) floor(($processed / $totalTables) * 75);
+                $this->notify(
+                    $progress,
+                    min($percent, 95),
+                    "Таблица {$tableName}: перенесено строк ".count($rows).'.'
+                );
             }
 
             DB::connection($targetConnection)->commit();
+            $this->notify($progress, 100, 'Миграция данных завершена успешно.');
         } catch (Throwable $e) {
             DB::connection($targetConnection)->rollBack();
             throw new RuntimeException('Ошибка переноса данных: '.$e->getMessage(), 0, $e);
         }
+    }
+
+    public function checkRemoteConnection(): void
+    {
+        try {
+            DB::purge('mysql_remote');
+            DB::connection('mysql_remote')->getPdo();
+            DB::connection('mysql_remote')->select('SELECT 1');
+        } catch (Throwable $e) {
+            throw new RuntimeException('Не удалось подключиться к удаленной БД: '.$e->getMessage(), 0, $e);
+        }
+    }
+
+    /**
+     * @return array{is_empty: bool, tables_before: int, table_names: array<int, string>}
+     */
+    public function inspectRemoteDatabase(): array
+    {
+        $this->checkRemoteConnection();
+
+        $tables = $this->tablesForConnection('mysql_remote');
+        $businessTables = array_values(array_filter(
+            $tables,
+            fn (string $tableName) => ! $this->shouldSkipTable($tableName)
+        ));
+
+        return [
+            'is_empty' => count($businessTables) === 0,
+            'tables_before' => count($businessTables),
+            'table_names' => $businessTables,
+        ];
+    }
+
+    /**
+     * @return array{mode: string, tables_before: int}
+     */
+    public function initializeRemoteDatabase(?callable $progress = null): array
+    {
+        $this->notify($progress, 5, 'Проверка подключения к удаленной БД...');
+        $inspection = $this->inspectRemoteDatabase();
+        $this->notify($progress, 15, 'Подключение успешно. Анализ структуры удаленной БД...');
+        $isEmpty = (bool) $inspection['is_empty'];
+        if ($isEmpty) {
+            $this->notify($progress, 35, 'База пустая: запускаем migrate...');
+            Artisan::call('migrate', [
+                '--database' => 'mysql_remote',
+                '--force' => true,
+            ]);
+            $this->notify($progress, 70, 'Миграции для удаленной БД завершены.');
+        } else {
+            $this->notify($progress, 35, 'База не пустая: выполняем migrate:fresh (очистка и пересоздание)...');
+            Artisan::call('migrate:fresh', [
+                '--database' => 'mysql_remote',
+                '--force' => true,
+            ]);
+            $this->notify($progress, 70, 'Очистка и миграции удаленной БД завершены.');
+        }
+
+        $this->notify($progress, 85, 'Запускаем сиды (db:seed)...');
+        Artisan::call('db:seed', [
+            '--database' => 'mysql_remote',
+            '--force' => true,
+        ]);
+        $this->notify($progress, 100, 'Инициализация удаленной БД завершена.');
+
+        return [
+            'mode' => $isEmpty ? 'empty' : 'not_empty',
+            'tables_before' => (int) $inspection['tables_before'],
+        ];
     }
 
     private function tablesForConnection(string $connection): array
@@ -115,8 +199,13 @@ class DatabaseProfileManager
 
     private function clearRuntimeCaches(): void
     {
-        Artisan::call('config:clear');
-        Artisan::call('cache:clear');
+        // Не запускаем artisan clear-команды из web-запроса:
+        // на некоторых окружениях это приводит к сбросу соединения браузера.
+        DB::purge('sqlite');
+        DB::purge('mysql_remote');
+
+        $activeProfile = (string) env('DB_ACTIVE_PROFILE', 'sqlite');
+        Config::set('database.default', $activeProfile === 'remote' ? 'mysql_remote' : 'sqlite');
     }
 
     private function writeEnvValues(array $values): void
@@ -150,5 +239,12 @@ class DatabaseProfileManager
         }
 
         return $value;
+    }
+
+    private function notify(?callable $progress, int $percent, string $message): void
+    {
+        if ($progress !== null) {
+            $progress($percent, $message);
+        }
     }
 }
