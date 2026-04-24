@@ -3,23 +3,25 @@
     extract(\App\Support\MenuVisibility::flags($user), EXTR_SKIP);
 @endphp
 <nav class="navbar navbar-expand-lg sticky-top bg-gradient shadow-sm navbar-icon-only">
-    <div class="container-fluid px-2 px-sm-3 px-lg-4">
+    <div class="container-fluid px-2 px-sm-3 px-lg-4 d-flex flex-wrap align-items-center">
         <button class="btn btn-light border rounded-3 py-2 px-2 shadow-sm d-lg-none flex-shrink-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#appSidebarNav" aria-controls="appSidebarNav" aria-label="Меню разделов">
             <i class="bi bi-layout-sidebar-inset-reverse fs-5 text-primary"></i>
         </button>
-        <a href="/" class="navbar-brand d-flex align-items-center gap-2 min-w-0 me-auto me-lg-0" style="max-width: min(100%, calc(100vw - 7.5rem));">
+        <a href="/" class="navbar-brand d-flex align-items-center gap-2 min-w-0 me-2 flex-shrink-0" style="max-width: min(100%, calc(100vw - 7.5rem));">
             <div class="p-2 bg-primary rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 40px; height: 40px;">
                 <img src="{{ asset('imgs/logo_white.png') }}" width="32" height="32" alt="">
             </div>
             <span class="fw-bold text-primary fs-5 text-truncate d-inline-block" style="letter-spacing: -0.5px;">{{ $settings->title }}</span>
         </a>
 
-        <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <button class="navbar-toggler border-0 ms-auto d-lg-none" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
             <span class="navbar-toggler-icon"></span>
         </button>
 
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <div class="collapse navbar-collapse flex-lg-grow-1" id="navbarNav">
+            <div class="d-flex flex-column flex-lg-row align-items-lg-center w-100 navbar-app-nav-row">
+                <div class="d-none d-lg-block flex-grow-1 flex-shrink-1 min-w-0" aria-hidden="true"></div>
+                <ul class="navbar-nav mb-2 mb-lg-0 mx-auto mx-lg-0 flex-shrink-0 navbar-app-nav-links">
                 @if($canDashboard)
                     <li class="nav-item">
                         <a class="nav-link nav-link-custom nav-tooltip px-3 py-2 rounded-3" href="/dashboard" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Главная">
@@ -202,7 +204,7 @@
                 @endif
             </ul>
 
-            <div class="d-flex align-items-center gap-2 ms-lg-3 flex-wrap">
+                <div class="d-flex flex-lg-grow-1 justify-content-lg-end align-items-center gap-2 flex-shrink-0 navbar-app-user-actions">
                 @if($canDashboard)
                     <a href="/profile" class="nav-link nav-link-custom px-3 py-2 rounded-3 small" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{{ $user->fio ?? 'Профиль' }}">
                         <i class="bi bi-person-circle fs-5 opacity-75"></i>
@@ -211,6 +213,7 @@
                 <a href="/logout" class="btn btn-sm p-0 fw-medium" title="Выход">
                     <span class="nav-link nav-link-custom px-3 py-2 rounded-3 d-inline-block mb-0"><i class="bi bi-box-arrow-right fs-5 opacity-75"></i></span>
                 </a>
+                </div>
             </div>
         </div>
     </div>
@@ -272,6 +275,16 @@
     .navbar.bg-gradient {
         background: linear-gradient(135deg, #ffffff 0%, #f4f7ff 50%, #f8f9fc 100%) !important;
         border-bottom: 1px solid rgba(13, 110, 253, 0.08);
+    }
+
+    /* Центр: равные flex-поля слева/справа от блока ссылок; справа — только профиль и выход */
+    @media (min-width: 992px) {
+        .navbar-app-nav-row {
+            min-height: 2.75rem;
+        }
+        .navbar-app-nav-links {
+            justify-content: center;
+        }
     }
 
     .nav-link-custom {

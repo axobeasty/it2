@@ -30,6 +30,78 @@
         border: none !important;
         background: none !important;
     }
+    .app-sidebar .sidebar-section-title.sidebar-section-title--collapsible {
+        padding: 0 !important;
+    }
+    .app-sidebar .sidebar-section-toggle {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem 0.75rem 0.15rem;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        text-transform: inherit;
+        cursor: pointer;
+    }
+    .app-sidebar .sidebar-section-toggle:hover {
+        color: #495057;
+    }
+    .app-sidebar .sidebar-section-toggle-label {
+        display: inline-flex;
+        align-items: center;
+        min-width: 0;
+        text-align: left;
+        column-gap: 0.65rem;
+    }
+    .app-sidebar .sidebar-section-icon {
+        flex-shrink: 0;
+        font-size: 1rem;
+        color: #0d6efd !important;
+        opacity: 1;
+    }
+    .app-sidebar .sidebar-section-toggle:hover .sidebar-section-icon {
+        color: #0a58ca !important;
+    }
+    .app-sidebar .sidebar-section-chevron {
+        font-size: 0.8rem;
+        transition: transform 0.2s ease;
+    }
+    .app-sidebar .sidebar-section-title.is-collapsed .sidebar-section-chevron {
+        transform: rotate(-90deg);
+    }
+    .app-sidebar .sidebar-section-content {
+        overflow: hidden;
+        transition: max-height 0.2s ease, opacity 0.2s ease;
+        opacity: 1;
+    }
+    .app-sidebar .sidebar-section-content.is-collapsed {
+        max-height: 0 !important;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    /* Раскрытая секция: пункты строго столбцом на всю ширину */
+    .app-sidebar .sidebar-section-content.nav {
+        display: flex !important;
+        flex-direction: column !important;
+        flex-wrap: nowrap !important;
+        align-items: stretch !important;
+        width: 100%;
+        list-style: none;
+        padding-left: 0;
+        margin-bottom: 0;
+    }
+    .app-sidebar .sidebar-section-content.nav > li {
+        width: 100%;
+        flex: 0 0 auto;
+    }
+    .app-sidebar .sidebar-section-content .sidebar-link {
+        width: 100%;
+    }
 
     .app-sidebar .sidebar-nav > .mb-4:first-child .sidebar-section-title {
         margin-top: 0.35rem !important;
@@ -184,10 +256,10 @@
             </ul>
             @endif
             @if($canOrdersMy || $canOrdersAdmin)
-            <h6 class="sidebar-section-title">
+            <h6 class="sidebar-section-title" data-section-icon="bi bi-card-checklist">
                 Заявки
             </h6>
-            <ul class="nav flex-column gap-1">
+            <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                 @if($canOrdersMy)
                 <li>
                     <a href="/orders/my" title="Мои заявки" class="nav-link sidebar-link d-flex align-items-center">
@@ -216,10 +288,10 @@
 
         @if($canPasswords)
         <div class="mb-4">
-            <h6 class="sidebar-section-title">
+            <h6 class="sidebar-section-title" data-section-icon="bi bi-tools">
                 Инструменты
             </h6>
-            <ul class="nav flex-column gap-1">
+            <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                 <li>
                     <a href="/passwords" title="Менеджер паролей" class="nav-link sidebar-link d-flex align-items-center">
                         <i class="bi bi-shield-lock-fill me-2 text-primary"></i>
@@ -232,10 +304,10 @@
 
         @if($canInventoryMy || $canInventoryAdmin)
         <div class="mb-4">
-            <h6 class="sidebar-section-title">
+            <h6 class="sidebar-section-title" data-section-icon="bi bi-box-seam">
                 Инвентарь
             </h6>
-            <ul class="nav flex-column gap-1">
+            <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                 @if($canInventoryMy)
                 <li>
                     <a href="/inv" title="Мой инвентарь" class="nav-link sidebar-link d-flex align-items-center">
@@ -264,10 +336,10 @@
 
         @if($canStudentTests || $canTestsAdmin || $canTestsStats)
             <div class="mb-4">
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-ui-checks">
                     Тестирование
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canStudentTests)
                         <li>
                             <a href="/tests" title="Тесты группы" class="nav-link sidebar-link d-flex align-items-center">
@@ -298,10 +370,10 @@
 
         @if($canEmployees || $canRoles || $canGroups)
             <div class="mb-4">
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-people">
                     Сотрудники
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canEmployees)
                     <li>
                         <a href="/employees" title="Управление пользователями" class="nav-link sidebar-link d-flex align-items-center">
@@ -332,10 +404,10 @@
 
         @if($canFaculties || $canChairs)
             <div class="mb-4">
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-mortarboard">
                     Образовательный процесс
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canFaculties)
                     <li>
                         <a href="/teachers/faculties" title="Факультеты" class="nav-link sidebar-link d-flex align-items-center">
@@ -358,10 +430,10 @@
 
         @if($canScheduleMy || $canScheduleConstructor || $canScheduleConstructorSettings)
             <div class="mb-4">
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-calendar-week">
                     Расписание
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canScheduleMy)
                     <li>
                         <a href="{{ route('schedule.my') }}" title="Моё расписание" class="nav-link sidebar-link d-flex align-items-center">
@@ -392,10 +464,10 @@
 
         @if($canPortfolioOwn || $canPortfolioTypes || $canPortfolioConfirm)
             <div class="mb-4">
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-journal-richtext">
                     Портфолио
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canPortfolioOwn)
                     <li>
                         <a href="/profile/portfolio" title="Моё портфолио" class="nav-link sidebar-link d-flex align-items-center">
@@ -426,10 +498,10 @@
 
             @if($canSettings || $canSettingsDatabase)
             <div>
-                <h6 class="sidebar-section-title">
+                <h6 class="sidebar-section-title" data-section-icon="bi bi-sliders">
                     Настройки
                 </h6>
-                <ul class="nav flex-column gap-1">
+                <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canSettings)
                         <li>
                             <a href="/settings/general" title="Основные настройки" class="nav-link sidebar-link d-flex align-items-center">
@@ -463,4 +535,96 @@
             @endif
     </nav>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var sidebarRoot = document.querySelector('.app-sidebar');
+        if (!sidebarRoot) return;
+
+        // true = пользователь открыл секцию; по умолчанию все секции закрыты
+        var storageKey = 'it-master-sidebar-sections-expanded-v2';
+        var expandedState = {};
+        try {
+            expandedState = JSON.parse(localStorage.getItem(storageKey) || '{}') || {};
+        } catch (e) {
+            expandedState = {};
+        }
+
+        function slugify(text) {
+            return (text || '')
+                .toString()
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-zа-я0-9]+/gi, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+
+        function saveState() {
+            localStorage.setItem(storageKey, JSON.stringify(expandedState));
+        }
+
+        var sectionTitles = sidebarRoot.querySelectorAll('.sidebar-section-title');
+        sectionTitles.forEach(function (titleEl) {
+            var contentEl = titleEl.nextElementSibling;
+            if (!contentEl || !contentEl.classList.contains('nav')) return;
+
+            var titleText = titleEl.textContent.trim();
+            var iconClasses = (titleEl.getAttribute('data-section-icon') || '').trim();
+            var sectionId = titleEl.dataset.sectionId || slugify(titleText);
+            titleEl.dataset.sectionId = sectionId;
+            titleEl.classList.add('sidebar-section-title--collapsible');
+
+            if (!contentEl.classList.contains('sidebar-section-content')) {
+                contentEl.classList.add('sidebar-section-content');
+            }
+            contentEl.dataset.sectionId = sectionId;
+
+            var iconHtml = iconClasses
+                ? '<i class="' + iconClasses + ' sidebar-section-icon" aria-hidden="true"></i>'
+                : '';
+
+            var button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'sidebar-section-toggle';
+            button.setAttribute('aria-expanded', 'false');
+            button.innerHTML =
+                '<span class="sidebar-section-toggle-label">' +
+                    iconHtml +
+                    '<span>' + titleText + '</span>' +
+                '</span>' +
+                '<i class="bi bi-chevron-down sidebar-section-chevron" aria-hidden="true"></i>';
+            titleEl.textContent = '';
+            titleEl.appendChild(button);
+
+            var isExpanded = expandedState[sectionId] === true;
+            var isCollapsed = !isExpanded;
+            function applyState(collapsed) {
+                titleEl.classList.toggle('is-collapsed', collapsed);
+                contentEl.classList.toggle('is-collapsed', collapsed);
+                button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                contentEl.style.maxHeight = collapsed ? '0px' : contentEl.scrollHeight + 'px';
+            }
+
+            applyState(isCollapsed);
+
+            button.addEventListener('click', function () {
+                isExpanded = !isExpanded;
+                isCollapsed = !isExpanded;
+                if (isExpanded) {
+                    expandedState[sectionId] = true;
+                } else {
+                    delete expandedState[sectionId];
+                }
+                saveState();
+                applyState(isCollapsed);
+            });
+        });
+
+        window.addEventListener('resize', function () {
+            sidebarRoot.querySelectorAll('.sidebar-section-content:not(.is-collapsed)').forEach(function (el) {
+                el.style.maxHeight = el.scrollHeight + 'px';
+            });
+        });
+    });
+</script>
 
