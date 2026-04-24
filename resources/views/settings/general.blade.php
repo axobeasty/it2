@@ -358,10 +358,34 @@
 
             logLine('Запрос: POST /settings/git/pull-updates (git pull --ff-only)');
             setProgress(62, { striped: true });
-            const pull = await postJson('/settings/git/pull-updates');
+            let pull;
+            try {
+                pull = await postJson('/settings/git/pull-updates');
+            } catch (pullErr) {
+                if (pullErr.payload && pullErr.payload.code === 'working_tree_dirty' && pullErr.payload.can_retry_with_stash) {
+                    if (pullErr.payload.dirty_lines && pullErr.payload.dirty_lines.length) {
+                        logLine('Мешают обновлению (изменения в отслеживаемых файлах):');
+                        pullErr.payload.dirty_lines.forEach(function (ln) { logLine('  ' + ln); });
+                    }
+                    if (window.confirm('Спрятать эти изменения в git stash и повторить pull? После обновления будет выполнен git stash pop.')) {
+                        logLine('Повтор: git stash push → pull → stash pop...');
+                        pull = await postJsonWithBody('/settings/git/pull-updates', { stash_first: true });
+                    } else {
+                        throw pullErr;
+                    }
+                } else {
+                    throw pullErr;
+                }
+            }
             setProgress(100, { variant: 'bg-success' });
             if (pull.message) {
                 logLine(pull.message);
+            }
+            if (pull.stash_pop_warning) {
+                logLine('Предупреждение stash pop:');
+                String(pull.stash_pop_warning).split(/\r?\n/).forEach(function (ln) {
+                    if (ln.length) { logLine('  ' + ln); }
+                });
             }
             if (pull.deploy_ref_note) {
                 logLine(pull.deploy_ref_note);

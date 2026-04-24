@@ -795,12 +795,32 @@ class SettingsController extends Controller
         }
 
         try {
-            $statusProcess = $this->runGitProcess(['git', 'status', '--porcelain'], $basePath);
-            if (trim($statusProcess->getOutput()) !== '') {
+            $stashFirst = filter_var($request->input('stash_first', false), FILTER_VALIDATE_BOOLEAN);
+            $blockingLines = $this->getGitBlockingStatusLines($basePath);
+            $didStash = false;
+
+            if ($blockingLines !== [] && ! $stashFirst) {
                 return response()->json([
                     'ok' => false,
-                    'message' => 'Есть локальные незакоммиченные изменения. Сначала сохраните или закоммитьте их.',
+                    'code' => 'working_tree_dirty',
+                    'can_retry_with_stash' => true,
+                    'message' => 'Есть незакоммиченные изменения в отслеживаемых файлах — без stash или коммита безопасный pull невозможен. Неотслеживаемые файлы (??) обычно не мешают.',
+                    'dirty_lines' => array_values($blockingLines),
                 ], 422);
+            }
+
+            if ($blockingLines !== [] && $stashFirst) {
+                $this->runGitProcess(['git', 'stash', 'push', '-m', 'it-master panel pull '.gmdate('c')], $basePath);
+                $didStash = true;
+                $blockingLines = $this->getGitBlockingStatusLines($basePath);
+                if ($blockingLines !== []) {
+                    return response()->json([
+                        'ok' => false,
+                        'code' => 'stash_did_not_clear_tree',
+                        'message' => 'После git stash остались изменения, которые мешают обновлению. Выполните git status по SSH и разберитесь вручную.',
+                        'dirty_lines' => array_values($blockingLines),
+                    ], 422);
+                }
             }
 
             $check = $this->computeUpdateAvailability();
@@ -836,8 +856,19 @@ class SettingsController extends Controller
                 $payload['message'] .= ' Метка в storage/app/deploy.json обновлена на '.substr($persist['ref'], 0, 7).'.';
             } elseif ($persist['skipped_env']) {
                 $payload['deploy_ref_note'] = 'deploy.json не меняли: задан DEPLOY_GIT_REF в .env (он важнее файла).';
-            } elseif ($persist['error'] !== null) {
+            } else            if ($persist['error'] !== null) {
                 $payload['deploy_ref_note'] = 'Не удалось обновить deploy.json: '.$persist['error'];
+            }
+
+            if ($didStash) {
+                $pop = new Process(['git', 'stash', 'pop'], $basePath, null, null, 120);
+                $pop->run();
+                if (! $pop->isSuccessful()) {
+                    $payload['stash_pop_warning'] = trim($pop->getErrorOutput()."\n".$pop->getOutput());
+                    if ($payload['stash_pop_warning'] !== '') {
+                        $payload['message'] .= ' После обновления git stash pop выдал предупреждение — проверьте слияние локальных правок.';
+                    }
+                }
             }
 
             return response()->json($payload);
@@ -1114,5 +1145,37 @@ class SettingsController extends Controller
         }
 
         return $process;
+    }
+
+    /**
+     * Строки git status --porcelain, которые мешают pull (всё кроме чисто неотслеживаемых ??).
+     *
+     * @return list<string>
+     */
+    private function getGitBlockingStatusLines(string $basePath): array
+    {
+        $process = new Process(['git', 'status', '--porcelain'], $basePath, null, null, 30);
+        $process->run();
+        if (! $process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+        $raw = trim($process->getOutput());
+        if ($raw === '') {
+            return [];
+        }
+        $lines = preg_split('/\r\n|\r|\n/', $raw);
+        $blocking = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (str_starts_with($line, '?? ')) {
+                continue;
+            }
+            $blocking[] = $line;
+        }
+
+        return $blocking;
     }
 }
