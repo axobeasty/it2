@@ -1,127 +1,115 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{$settings->title}}</title>
+@extends('layout.settings', ['settingsSection' => 'general'])
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.bootcss.com/toastr.js/latest/css/toastr.min.css">
-</head>
-<body>
-<style>
-    body{
-        background: #eaeff6;
+@section('page_title', 'Основные настройки — ' . $settings->title)
 
+@section('settings_heading', 'Основные настройки')
+@section('settings_subheading', 'Параметры сайта, режим обслуживания и обновления кода.')
 
-    }
-</style>
-@include('layout.nav')
-<div class="row d-flex flex-grow-1 h-100">
-    <div class="col bg-white">
-        <div class="row bg-light border-bottom p-3">
-            <p class="display-6">Основные настройки </p>
-            <a href="/settings" class="text-decoration-none"> ← Назад</a>
-        </div>
-        <div class="p-5">
-
-            <form action="/settings/save" method="post">
+@section('settings_content')
+            <form action="/settings/save" method="post" class="mb-2">
                 @csrf
-                <div class="row">
-                    <div class="col-2"><p class="lead p-1">Заголовок сайта</p></div>
-                    <div class="col"><input type="text" name="title" value="{{$settings->title}}" class="form-control" id=""></div>
+                <input type="hidden" name="page" value="general">
+
+                <div class="mb-4">
+                    <div class="settings-section-title">Сайт</div>
+                    <label for="settings-site-title" class="settings-field-label">Заголовок сайта</label>
+                    <input type="text" name="title" id="settings-site-title" value="{{ $settings->title }}" class="form-control form-control-lg rounded-3" maxlength="255">
                 </div>
-                <input type="text" name="page" value="general" hidden>
-                <div class="row pt-5">
-                    <div class="col-2"><p class="lead p-1">Техническое обслуживание</p></div>
-                    <div class="col">
+
+                <div class="mb-4">
+                    <div class="settings-section-title">Доступность</div>
+                    <label class="settings-field-label d-block">Техническое обслуживание</label>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
                         @if($settings->is_enabled == 1)
-                        <a href="/settings/general/site/disable" class="btn btn-outline-danger">Выключить сайт</a>
+                            <a href="/settings/general/site/disable" class="btn btn-outline-danger rounded-pill px-4">
+                                <i class="bi bi-power me-1"></i> Выключить сайт
+                            </a>
+                            <span class="small text-success"><i class="bi bi-check-circle-fill me-1"></i>Сайт открыт для пользователей</span>
                         @else
-                            <a href="/settings/general/site/enable" class="btn btn-outline-success">Включить сайт</a>
+                            <a href="/settings/general/site/enable" class="btn btn-success rounded-pill px-4">
+                                <i class="bi bi-play-fill me-1"></i> Включить сайт
+                            </a>
+                            <span class="small text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>Сайт в режиме обслуживания</span>
                         @endif
                     </div>
                 </div>
 
-                <div class="row disabled">
-                    <div class="col-2"><p class="lead p-1">Причина отключения</p></div>
-                    <div class="col">
-                        <div class="row ">
-                            <div class="col-4 "> <textarea class="form-control" name="disable_reason" aria-label="With textarea">{{$settings->disable_reason}}</textarea></div>
-                        </div>
-
-                    </div>
+                <div class="mb-4">
+                    <label for="settings-disable-reason" class="settings-field-label">Текст при отключении</label>
+                    <textarea class="form-control rounded-3" name="disable_reason" id="settings-disable-reason" rows="3" placeholder="Сообщение на странице заглушки">{{ $settings->disable_reason }}</textarea>
                 </div>
-                <div class="pt-5 d-flex justify-content-start"><button type="submit" class="btn btn-dark ">Сохранить изменения</button></div>
+
+                <button type="submit" class="btn btn-primary rounded-pill px-4">
+                    <i class="bi bi-check2 me-1"></i> Сохранить изменения
+                </button>
             </form>
 
-            <hr class="my-4">
+            <hr class="my-5 opacity-25">
+
             @php
                 $deployResolved = \App\Support\DeployVersion::resolveLocalRef(base_path());
             @endphp
-            <div class="row">
-                <div class="col-2">
-                    <p class="lead p-1">Обновления кода</p>
+            <div class="settings-section-title">Обновления кода</div>
+            <p class="text-muted small mb-3">
+                Проверка относительно GitHub и при наличии <code>.git</code> — загрузка через <code>git pull</code>.
+            </p>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <button type="button" class="btn btn-outline-primary rounded-pill" id="btn-git-check-and-pull">
+                    <i class="bi bi-cloud-download me-1"></i> Проверить обновления
+                </button>
+            </div>
+            @if ($deployResolved['source'] === 'env')
+                <div class="alert alert-info rounded-3 small mb-3 py-3">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Используется <code>DEPLOY_GIT_REF</code> в <code>.env</code>:
+                    <code class="user-select-all">{{ $deployResolved['ref'] }}</code>.
+                    Файл <code>deploy.json</code> из панели не используется, пока задана эта переменная.
                 </div>
-                <div class="col">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                        <button type="button" class="btn btn-outline-primary" id="btn-git-check-and-pull">
-                            Проверить обновления
+            @else
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-12 col-md-7 col-lg-6">
+                        <label for="deploy-ref-input" class="form-label small fw-semibold mb-1">Commit на сервере (SHA после выкладки)</label>
+                        <input type="text" class="form-control font-monospace rounded-3" id="deploy-ref-input"
+                            value="{{ $deployResolved['ref'] ?? '' }}"
+                            placeholder="например aab3eed"
+                            autocomplete="off"
+                            maxlength="40">
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-outline-secondary rounded-pill" id="btn-deploy-ref-save" title="Пишет storage/app/deploy.json">
+                            <i class="bi bi-bookmark-plus me-1"></i> Сохранить метку
                         </button>
                     </div>
-                    @if ($deployResolved['source'] === 'env')
-                        <p class="small text-secondary mb-2">
-                            Сейчас используется <code>DEPLOY_GIT_REF</code> из <code>.env</code> (значение: <code class="user-select-all">{{ $deployResolved['ref'] }}</code>).
-                            Файл <code>deploy.json</code> из панели не подхватится, пока задана эта переменная.
-                        </p>
-                    @else
-                        <div class="row g-2 align-items-end mb-2">
-                            <div class="col-12 col-md-6 col-lg-5">
-                                <label for="deploy-ref-input" class="form-label small mb-0">Commit на сервере (SHA из GitHub после выкладки)</label>
-                                <input type="text" class="form-control form-control-sm font-monospace" id="deploy-ref-input"
-                                    value="{{ $deployResolved['ref'] ?? '' }}"
-                                    placeholder="например aab3eed"
-                                    autocomplete="off"
-                                    maxlength="40">
-                            </div>
-                            <div class="col-auto">
-                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deploy-ref-save" title="Пишет storage/app/deploy.json на сервере">
-                                    Сохранить метку
-                                </button>
-                            </div>
+                </div>
+            @endif
+            <p class="small text-muted mb-0" id="git-update-status">
+                Без <code>.git</code> укажите SHA залитого коммита; при совпадении с веткой метка в <code>deploy.json</code> обновится автоматически.
+                После <code>git pull</code> метка тоже синхронизируется (если нет только <code>DEPLOY_GIT_REF</code> в <code>.env</code>).
+            </p>
+
+            <div class="modal fade" id="deploy-update-modal" tabindex="-1" aria-labelledby="deploy-update-modal-title" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-centered">
+                    <div class="modal-content rounded-4 border-0 shadow">
+                        <div class="modal-header border-0 pb-0">
+                            <h2 class="modal-title fs-5 fw-semibold" id="deploy-update-modal-title">Обновление кода</h2>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть" id="deploy-modal-dismiss-x"></button>
                         </div>
-                    @endif
-                    <div class="small text-muted mt-2" id="git-update-status">
-                        Если на сервере есть <code>.git</code> — проверка через git и при необходимости <code>git pull</code>.
-                        Без <code>.git</code> сравнение идёт с GitHub: при первой проверке укажите SHA залитого коммита; если метка совпадает с веткой, система сама обновит <code>deploy.json</code>. После <code>git pull</code> метка тоже записывается автоматически (если не задан только <code>DEPLOY_GIT_REF</code> в <code>.env</code>).
+                        <div class="modal-body pt-2">
+                            <div class="progress mb-3 rounded-pill" style="height: 8px;">
+                                <div class="progress-bar rounded-pill" id="deploy-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <p class="small text-muted mb-1">Журнал операций</p>
+                            <div id="deploy-console" class="deploy-console border rounded-3 bg-dark text-light px-3 py-2 small"></div>
+                        </div>
+                        <div class="modal-footer border-0 pt-0">
+                            <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal" id="deploy-modal-close">Закрыть</button>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
+@endsection
 
-<div class="modal fade" id="deploy-update-modal" tabindex="-1" aria-labelledby="deploy-update-modal-title" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h1 class="modal-title fs-5" id="deploy-update-modal-title">Обновление кода</h1>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть" id="deploy-modal-dismiss-x"></button>
-            </div>
-            <div class="modal-body">
-                <div class="progress mb-3" style="height: 8px;">
-                    <div class="progress-bar" id="deploy-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-                </div>
-                <p class="small text-muted mb-1">Журнал операций</p>
-                <div id="deploy-console" class="deploy-console border rounded bg-dark text-light px-3 py-2 small"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="deploy-modal-close">Закрыть</button>
-            </div>
-        </div>
-    </div>
-</div>
-
+@push('settings_head')
 <style>
     .deploy-console {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -139,10 +127,9 @@
         border-bottom: none;
     }
 </style>
+@endpush
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
-<script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
-<script src="https://cdn.bootcss.com/toastr.js/latest/js/toastr.min.js"></script>
+@push('settings_scripts')
 <script>
 (function () {
     const button = document.getElementById('btn-git-check-and-pull');
@@ -166,7 +153,7 @@
     });
 
     function setStatus(message, isError) {
-        statusBox.className = isError ? 'small text-danger mt-2' : 'small text-muted mt-2';
+        statusBox.className = isError ? 'small text-danger mb-0' : 'small text-muted mb-0';
         statusBox.textContent = message;
     }
 
@@ -342,7 +329,7 @@
                 setProgress(100, { variant: 'bg-warning' });
                 setStatus(check.message || 'Укажите версию на сервере (deploy.json или DEPLOY_GIT_REF).', false);
                 toastr.warning(check.message || 'Нужна метка версии на сервере.');
-                logLine('Укажите commit на странице ниже (поле «Commit на сервере») и нажмите «Сохранить метку», затем снова «Проверить обновления».');
+                logLine('Укажите commit на странице (поле «Commit на сервере») и нажмите «Сохранить метку», затем снова «Проверить обновления».');
                 if (check.remote_short && deployRefInput && !deployRefInput.value.trim()) {
                     deployRefInput.placeholder = 'например ' + check.remote_short;
                 }
@@ -411,6 +398,4 @@
     });
 })();
 </script>
-{!! Toastr::message() !!}
-</body>
-</html>
+@endpush

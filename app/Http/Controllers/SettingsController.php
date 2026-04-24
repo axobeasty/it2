@@ -25,7 +25,7 @@ class SettingsController extends Controller
             $user = $request->session()->get('user');
             $settings = Settings::where('id',1)->first();
             if($user->canAccessPage('settings')){
-                return view('settings.general',compact('user','settings'));
+                return view('settings.index', compact('user', 'settings'));
             }else{
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
                 return redirect('/');

@@ -1,118 +1,110 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{$settings->title}}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.bootcss.com/toastr.js/latest/css/toastr.min.css">
-</head>
-<body>
-<style>body{background:#eaeff6;}</style>
-@include('layout.nav')
+@extends('layout.settings', ['settingsSection' => 'database'])
 
-<div class="row d-flex flex-grow-1 h-100">
-    <div class="col bg-white">
-        <div class="row bg-light border-bottom p-3">
-            <p class="display-6">Настройки базы данных</p>
-            <a href="/settings" class="text-decoration-none"> ← Назад</a>
-        </div>
-        <div class="p-5">
-            <div class="border rounded p-4">
-                <h4 class="mb-2">Единый мастер настройки БД</h4>
-                <p class="text-muted mb-3">
-                    Нажмите кнопку и выполните шаги внутри модального окна:
-                    профиль -> проверка подключения -> dry-run -> подтверждение -> выполнение.
+@section('page_title', 'База данных — ' . $settings->title)
+
+@section('settings_heading', 'База данных')
+@section('settings_subheading', 'Профиль SQLite или удалённый MySQL, мастер настройки и миграции.')
+
+@section('settings_content')
+    <div class="rounded-4 border bg-light bg-opacity-50 p-4 mb-4">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+            <div>
+                <h2 class="h5 fw-semibold mb-2"><i class="bi bi-magic text-primary me-1"></i> Мастер настройки БД</h2>
+                <p class="text-muted small mb-0" style="max-width: 42rem;">
+                    Пошагово: профиль → проверка подключения → dry-run → подтверждение → инициализация или миграция.
                 </p>
-                <button type="button" class="btn btn-dark" id="btn-open-db-wizard">Начать настройку БД</button>
-                <span class="small text-muted ms-3">Текущий профиль: <b id="current-active-profile">{{$activeProfile}}</b></span>
             </div>
+            <button type="button" class="btn btn-primary rounded-pill px-4 flex-shrink-0" id="btn-open-db-wizard">
+                <i class="bi bi-play-fill me-1"></i> Начать
+            </button>
+        </div>
+        <div class="mt-3 pt-3 border-top border-light small">
+            Текущий активный профиль:
+            <span class="badge text-bg-primary rounded-pill" id="current-active-profile">{{ $activeProfile }}</span>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="dbWizardModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Мастер настройки БД</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <span class="badge text-bg-secondary" id="w-step-1">1. Профиль</span>
-                    <span class="badge text-bg-secondary" id="w-step-2">2. Проверка</span>
-                    <span class="badge text-bg-secondary" id="w-step-3">3. Dry-run</span>
-                    <span class="badge text-bg-secondary" id="w-step-4">4. Подтверждение</span>
-                    <span class="badge text-bg-secondary" id="w-step-5">5. Выполнение</span>
+    <div class="modal fade" id="dbWizardModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h2 class="modal-title fs-5 fw-semibold">Мастер настройки БД</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
-
-                <div id="step1">
-                    <label class="form-label">Профиль БД</label>
-                    <select class="form-select mb-3" id="wiz-db-profile">
-                        <option value="sqlite" {{$activeProfile === 'sqlite' ? 'selected' : ''}}>SQLite (локальная)</option>
-                        <option value="remote" {{$activeProfile === 'remote' ? 'selected' : ''}}>Remote MySQL</option>
-                    </select>
-                    <div id="wiz-remote-fields">
-                        <div class="row g-3">
-                            <div class="col-md-6"><label class="form-label">Host</label><input type="text" id="wiz-remote-host" class="form-control" value="{{$remoteHost}}"></div>
-                            <div class="col-md-3"><label class="form-label">Port</label><input type="text" id="wiz-remote-port" class="form-control" value="{{$remotePort}}"></div>
-                            <div class="col-md-6"><label class="form-label">Database</label><input type="text" id="wiz-remote-database" class="form-control" value="{{$remoteDatabase}}"></div>
-                            <div class="col-md-6"><label class="form-label">Username</label><input type="text" id="wiz-remote-username" class="form-control" value="{{$remoteUsername}}"></div>
-                            <div class="col-md-6"><label class="form-label">Password</label><input type="text" id="wiz-remote-password" class="form-control" value="{{$remotePassword}}"></div>
-                            <div class="col-md-3"><label class="form-label">Charset</label><input type="text" id="wiz-remote-charset" class="form-control" value="{{$remoteCharset}}"></div>
-                            <div class="col-md-3"><label class="form-label">Collation</label><input type="text" id="wiz-remote-collation" class="form-control" value="{{$remoteCollation}}"></div>
-                        </div>
+                <div class="modal-body">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="badge rounded-pill text-bg-secondary" id="w-step-1">1. Профиль</span>
+                        <span class="badge rounded-pill text-bg-secondary" id="w-step-2">2. Проверка</span>
+                        <span class="badge rounded-pill text-bg-secondary" id="w-step-3">3. Dry-run</span>
+                        <span class="badge rounded-pill text-bg-secondary" id="w-step-4">4. Подтверждение</span>
+                        <span class="badge rounded-pill text-bg-secondary" id="w-step-5">5. Выполнение</span>
                     </div>
-                    <button class="btn btn-primary mt-3" id="wiz-save-profile">Сохранить профиль</button>
-                </div>
 
-                <div id="step2" class="d-none mt-3 text-muted small">
-                    Автоматическая проверка подключения выполняется после сохранения профиля.
-                </div>
-                <div id="step3" class="d-none mt-3 text-muted small">
-                    Dry-run выполняется автоматически после успешной проверки подключения.
-                </div>
-                <div id="step4" class="d-none mt-3">
-                    <label class="form-label">Введите ПОДТВЕРЖДАЮ</label>
-                    <input class="form-control" id="wiz-confirm" type="text">
-                </div>
-                <div id="step5" class="d-none mt-3 d-flex gap-2 flex-wrap">
-                    <button class="btn btn-outline-danger" id="wiz-init">Инициализировать remote БД</button>
-                    <button class="btn btn-outline-primary" id="wiz-migrate">Миграция sqlite -> remote</button>
-                    <button class="btn btn-success" id="wiz-activate-profile">Переключить профиль</button>
-                </div>
+                    <div id="step1">
+                        <label class="form-label fw-semibold">Профиль БД</label>
+                        <select class="form-select mb-3 rounded-3" id="wiz-db-profile">
+                            <option value="sqlite" {{ $activeProfile === 'sqlite' ? 'selected' : '' }}>SQLite (локальная)</option>
+                            <option value="remote" {{ $activeProfile === 'remote' ? 'selected' : '' }}>Remote MySQL</option>
+                        </select>
+                        <div id="wiz-remote-fields">
+                            <div class="row g-3">
+                                <div class="col-md-6"><label class="form-label">Host</label><input type="text" id="wiz-remote-host" class="form-control rounded-3" value="{{ $remoteHost }}"></div>
+                                <div class="col-md-3"><label class="form-label">Port</label><input type="text" id="wiz-remote-port" class="form-control rounded-3" value="{{ $remotePort }}"></div>
+                                <div class="col-md-6"><label class="form-label">Database</label><input type="text" id="wiz-remote-database" class="form-control rounded-3" value="{{ $remoteDatabase }}"></div>
+                                <div class="col-md-6"><label class="form-label">Username</label><input type="text" id="wiz-remote-username" class="form-control rounded-3" value="{{ $remoteUsername }}"></div>
+                                <div class="col-md-6"><label class="form-label">Password</label><input type="text" id="wiz-remote-password" class="form-control rounded-3" value="{{ $remotePassword }}"></div>
+                                <div class="col-md-3"><label class="form-label">Charset</label><input type="text" id="wiz-remote-charset" class="form-control rounded-3" value="{{ $remoteCharset }}"></div>
+                                <div class="col-md-3"><label class="form-label">Collation</label><input type="text" id="wiz-remote-collation" class="form-control rounded-3" value="{{ $remoteCollation }}"></div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary rounded-pill mt-3" id="wiz-save-profile">Сохранить профиль</button>
+                    </div>
 
-                <div id="wiz-status" class="alert alert-secondary mt-3 mb-0">Ожидание запуска мастера...</div>
+                    <div id="step2" class="d-none mt-3 text-muted small">
+                        Автоматическая проверка подключения выполняется после сохранения профиля.
+                    </div>
+                    <div id="step3" class="d-none mt-3 text-muted small">
+                        Dry-run выполняется автоматически после успешной проверки подключения.
+                    </div>
+                    <div id="step4" class="d-none mt-3">
+                        <label class="form-label fw-semibold">Введите ПОДТВЕРЖДАЮ</label>
+                        <input class="form-control rounded-3" id="wiz-confirm" type="text" autocomplete="off">
+                    </div>
+                    <div id="step5" class="d-none mt-3 d-flex gap-2 flex-wrap">
+                        <button type="button" class="btn btn-outline-danger rounded-pill" id="wiz-init">Инициализировать remote БД</button>
+                        <button type="button" class="btn btn-outline-primary rounded-pill" id="wiz-migrate">Миграция sqlite → remote</button>
+                        <button type="button" class="btn btn-success rounded-pill" id="wiz-activate-profile">Переключить профиль</button>
+                    </div>
+
+                    <div id="wiz-status" class="alert alert-secondary mt-3 mb-0 rounded-3">Ожидание запуска мастера...</div>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="migrationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="migrationModalLabel">Операция с БД</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="progress mb-3">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" id="migration-progress-bar" style="width:0%">0%</div>
+    <div class="modal fade" id="migrationModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header border-0 pb-0">
+                    <h2 class="modal-title fs-5 fw-semibold" id="migrationModalLabel">Операция с БД</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
-                <pre id="migration-console" class="bg-dark text-light rounded p-3" style="min-height:280px;max-height:420px;white-space:pre-wrap;"></pre>
-            </div>
-            <div class="modal-footer">
-                <span class="text-muted small me-auto" id="migration-status-hint">Ожидание запуска...</span>
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                <div class="modal-body pt-2">
+                    <div class="progress mb-3 rounded-pill" style="height:10px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated rounded-pill" id="migration-progress-bar" style="width:0%">0%</div>
+                    </div>
+                    <pre id="migration-console" class="bg-dark text-light rounded-3 p-3 small mb-0" style="min-height:280px;max-height:420px;white-space:pre-wrap;"></pre>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <span class="text-muted small me-auto" id="migration-status-hint">Ожидание запуска...</span>
+                    <button type="button" class="btn btn-outline-secondary rounded-pill" data-bs-dismiss="modal">Закрыть</button>
+                </div>
             </div>
         </div>
     </div>
-</div>
+@endsection
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
-<script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
-<script src="https://cdn.bootcss.com/toastr.js/latest/js/toastr.min.js"></script>
+@push('settings_scripts')
 <script>
 (function () {
     const csrf = '{{ csrf_token() }}';
@@ -128,7 +120,7 @@
 
     function setStatus(message, type) {
         const alertType = type || 'secondary';
-        statusBox.className = `alert alert-${alertType} mt-3 mb-0`;
+        statusBox.className = `alert alert-${alertType} mt-3 mb-0 rounded-3`;
         statusBox.textContent = message;
     }
 
@@ -330,6 +322,4 @@
     sync();
 })();
 </script>
-{!! Toastr::message() !!}
-</body>
-</html>
+@endpush
