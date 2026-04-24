@@ -72,6 +72,42 @@ final class DeployVersion
         return ['ref' => null, 'source' => 'none'];
     }
 
+    /**
+     * @throws \JsonException
+     */
+    public static function writeDeployJson(string $ref): void
+    {
+        $ref = strtolower(trim($ref));
+        if ($ref === '') {
+            throw new \InvalidArgumentException('Пустой ref.');
+        }
+
+        $path = self::deployJsonPath();
+        $dir = dirname($path);
+        if (! is_dir($dir)) {
+            throw new \RuntimeException('Каталог storage/app не найден.');
+        }
+
+        if (! is_writable($dir)) {
+            throw new \RuntimeException('Нет прав на запись в storage/app.');
+        }
+
+        if (file_exists($path) && ! is_writable($path)) {
+            throw new \RuntimeException('Файл deploy.json есть, но PHP не может его перезаписать (права на файл).');
+        }
+
+        $payload = [
+            'ref' => $ref,
+            'updated_at' => gmdate('c'),
+        ];
+
+        $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+
+        if (file_put_contents($path, $json) === false) {
+            throw new \RuntimeException('Не удалось записать файл deploy.json.');
+        }
+    }
+
     private static function gitHeadSha(string $basePath): ?string
     {
         try {

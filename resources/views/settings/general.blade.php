@@ -56,17 +56,44 @@
             </form>
 
             <hr class="my-4">
+            @php
+                $deployResolved = \App\Support\DeployVersion::resolveLocalRef(base_path());
+            @endphp
             <div class="row">
                 <div class="col-2">
                     <p class="lead p-1">Обновления кода</p>
                 </div>
                 <div class="col">
-                    <button type="button" class="btn btn-outline-primary" id="btn-git-check-and-pull">
-                        Проверить обновления
-                    </button>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary" id="btn-git-check-and-pull">
+                            Проверить обновления
+                        </button>
+                    </div>
+                    @if ($deployResolved['source'] === 'env')
+                        <p class="small text-secondary mb-2">
+                            Сейчас используется <code>DEPLOY_GIT_REF</code> из <code>.env</code> (значение: <code class="user-select-all">{{ $deployResolved['ref'] }}</code>).
+                            Файл <code>deploy.json</code> из панели не подхватится, пока задана эта переменная.
+                        </p>
+                    @else
+                        <div class="row g-2 align-items-end mb-2">
+                            <div class="col-12 col-md-6 col-lg-5">
+                                <label for="deploy-ref-input" class="form-label small mb-0">Commit на сервере (SHA из GitHub после выкладки)</label>
+                                <input type="text" class="form-control form-control-sm font-monospace" id="deploy-ref-input"
+                                    value="{{ $deployResolved['ref'] ?? '' }}"
+                                    placeholder="например aab3eed"
+                                    autocomplete="off"
+                                    maxlength="40">
+                            </div>
+                            <div class="col-auto">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-deploy-ref-save" title="Пишет storage/app/deploy.json на сервере">
+                                    Сохранить метку
+                                </button>
+                            </div>
+                        </div>
+                    @endif
                     <div class="small text-muted mt-2" id="git-update-status">
                         Если на сервере есть <code>.git</code> — проверка через git и при необходимости <code>git pull</code>.
-                        Если проект залит по FTP — сравнение с GitHub по ветке из настроек; укажите текущий commit в <code>storage/app/deploy.json</code> (поле <code>ref</code>) или в <code>DEPLOY_GIT_REF</code> в <code>.env</code>.
+                        Без <code>.git</code> сравнение идёт с GitHub: один раз укажите SHA того коммита, который реально залит (поле выше или файл <code>storage/app/deploy.json</code>).
                     </div>
                 </div>
             </div>
@@ -119,6 +146,8 @@
 <script>
 (function () {
     const button = document.getElementById('btn-git-check-and-pull');
+    const saveRefBtn = document.getElementById('btn-deploy-ref-save');
+    const deployRefInput = document.getElementById('deploy-ref-input');
     const statusBox = document.getElementById('git-update-status');
     const csrf = '{{ csrf_token() }}';
     const modalEl = document.getElementById('deploy-update-modal');
@@ -127,7 +156,7 @@
     const closeBtn = document.getElementById('deploy-modal-close');
     const dismissX = document.getElementById('deploy-modal-dismiss-x');
 
-    if (!button || !statusBox || !modalEl || !consoleEl || !progressBar) {
+    if (!statusBox || !modalEl || !consoleEl || !progressBar) {
         return;
     }
 
@@ -170,13 +199,49 @@
 
     function setModalBusy(busy) {
         const dis = !!busy;
-        button.disabled = dis;
+        if (button) {
+            button.disabled = dis;
+        }
+        if (saveRefBtn) {
+            saveRefBtn.disabled = dis;
+        }
+        if (deployRefInput) {
+            deployRefInput.disabled = dis;
+        }
         if (closeBtn) {
             closeBtn.disabled = dis;
         }
         if (dismissX) {
             dismissX.disabled = dis;
         }
+    }
+
+    async function postJsonWithBody(url, body) {
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+        } catch (_networkError) {
+            const err = new Error('Не удалось связаться с сервером.');
+            err.network = true;
+            throw err;
+        }
+
+        const payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || payload.ok === false) {
+            const err = new Error(payload.message || 'Ошибка запроса.');
+            err.payload = payload;
+            err.status = response.status;
+            throw err;
+        }
+        return payload;
     }
 
     async function postJson(url) {
@@ -203,6 +268,37 @@
             throw err;
         }
         return payload;
+    }
+
+    if (saveRefBtn && deployRefInput) {
+        saveRefBtn.addEventListener('click', async function () {
+            const raw = (deployRefInput.value || '').trim();
+            if (raw.length < 7) {
+                toastr.error('Введите SHA коммита не короче 7 символов (только 0–9, a–f).');
+                return;
+            }
+            if (!/^[0-9a-fA-F]+$/.test(raw)) {
+                toastr.error('SHA должен содержать только шестнадцатеричные символы.');
+                return;
+            }
+            saveRefBtn.disabled = true;
+            try {
+                const res = await postJsonWithBody('/settings/git/deploy-ref', { ref: raw });
+                if (res.ref) {
+                    deployRefInput.value = res.ref;
+                }
+                toastr.success(res.message || 'Метка сохранена.');
+                setStatus(res.message || 'Метка версии сохранена. Можно нажать «Проверить обновления».', false);
+            } catch (e) {
+                toastr.error(e.message || 'Не удалось сохранить.');
+            } finally {
+                saveRefBtn.disabled = false;
+            }
+        });
+    }
+
+    if (!button) {
+        return;
     }
 
     button.addEventListener('click', async function () {
@@ -240,7 +336,10 @@
                 setProgress(100, { variant: 'bg-warning' });
                 setStatus(check.message || 'Укажите версию на сервере (deploy.json или DEPLOY_GIT_REF).', false);
                 toastr.warning(check.message || 'Нужна метка версии на сервере.');
-                logLine('Готово: нужна метка версии на сервере.');
+                logLine('Укажите commit на странице ниже (поле «Commit на сервере») и нажмите «Сохранить метку», затем снова «Проверить обновления».');
+                if (check.remote_short && deployRefInput && !deployRefInput.value.trim()) {
+                    deployRefInput.placeholder = 'например ' + check.remote_short;
+                }
                 return;
             }
 

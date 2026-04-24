@@ -86,6 +86,7 @@ Route::post('/settings/database/migrate-stream','App\Http\Controllers\SettingsCo
 Route::get('/settings/email','App\Http\Controllers\SettingsController@email');
 Route::post('/settings/git/check-updates','App\Http\Controllers\SettingsController@checkGitUpdates');
 Route::post('/settings/git/pull-updates','App\Http\Controllers\SettingsController@pullGitUpdates');
+Route::post('/settings/git/deploy-ref','App\Http\Controllers\SettingsController@saveDeployRef');
 
 Route::get('/inv','App\Http\Controllers\InventoryController@index');
 Route::get('/inv/manage','App\Http\Controllers\InventoryController@manage');

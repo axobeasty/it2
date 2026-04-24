@@ -835,6 +835,57 @@ class SettingsController extends Controller
         }
     }
 
+    public function saveDeployRef(Request $request)
+    {
+        if (! $request->session()->has('user')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Необходима авторизация.',
+            ], 401);
+        }
+
+        $user = $request->session()->get('user');
+        if (! $user->canAccessPage('settings')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
+            ], 403);
+        }
+
+        $resolved = DeployVersion::resolveLocalRef(base_path());
+        if ($resolved['source'] === 'env') {
+            return response()->json([
+                'ok' => false,
+                'code' => 'deploy_ref_env_overrides_file',
+                'message' => 'Активна переменная DEPLOY_GIT_REF в .env — она важнее файла deploy.json. Измените или удалите её на сервере, затем при необходимости сохраните метку здесь.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'ref' => ['required', 'string', 'min:7', 'max:40', 'regex:/^[0-9a-fA-F]+$/'],
+        ]);
+
+        try {
+            DeployVersion::writeDeployJson($validated['ref']);
+        } catch (\JsonException $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Не удалось сформировать deploy.json: '.$e->getMessage(),
+            ], 422);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Метка версии сохранена в storage/app/deploy.json. Нажмите «Проверить обновления» ещё раз.',
+            'ref' => strtolower(trim($validated['ref'])),
+        ]);
+    }
+
     /**
      * @return array{ok: bool, code?: string, message?: string, has_updates?: bool|null, behind_count?: int|null, can_pull?: bool, check_method?: string, ...}
      */
