@@ -58,20 +58,60 @@
             <hr class="my-4">
             <div class="row">
                 <div class="col-2">
-                    <p class="lead p-1">Git обновления</p>
+                    <p class="lead p-1">Обновления кода</p>
                 </div>
                 <div class="col">
                     <button type="button" class="btn btn-outline-primary" id="btn-git-check-and-pull">
-                        Проверить изменения в git репозитории
+                        Проверить обновления
                     </button>
                     <div class="small text-muted mt-2" id="git-update-status">
-                        Нажмите кнопку, чтобы проверить и скачать обновления из удаленного репозитория.
+                        Если на сервере есть <code>.git</code> — проверка через git и при необходимости <code>git pull</code>.
+                        Если проект залит по FTP — сравнение с GitHub по ветке из настроек; укажите текущий commit в <code>storage/app/deploy.json</code> (поле <code>ref</code>) или в <code>DEPLOY_GIT_REF</code> в <code>.env</code>.
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="deploy-update-modal" tabindex="-1" aria-labelledby="deploy-update-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h1 class="modal-title fs-5" id="deploy-update-modal-title">Обновление кода</h1>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть" id="deploy-modal-dismiss-x"></button>
+            </div>
+            <div class="modal-body">
+                <div class="progress mb-3" style="height: 8px;">
+                    <div class="progress-bar" id="deploy-progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                </div>
+                <p class="small text-muted mb-1">Журнал операций</p>
+                <div id="deploy-console" class="deploy-console border rounded bg-dark text-light px-3 py-2 small"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="deploy-modal-close">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .deploy-console {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        max-height: min(320px, 45vh);
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+    .deploy-console .deploy-log-line {
+        margin: 0;
+        padding: 2px 0;
+        border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .deploy-console .deploy-log-line:last-child {
+        border-bottom: none;
+    }
+</style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
 <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
@@ -81,14 +121,62 @@
     const button = document.getElementById('btn-git-check-and-pull');
     const statusBox = document.getElementById('git-update-status');
     const csrf = '{{ csrf_token() }}';
+    const modalEl = document.getElementById('deploy-update-modal');
+    const consoleEl = document.getElementById('deploy-console');
+    const progressBar = document.getElementById('deploy-progress-bar');
+    const closeBtn = document.getElementById('deploy-modal-close');
+    const dismissX = document.getElementById('deploy-modal-dismiss-x');
 
-    if (!button || !statusBox) {
+    if (!button || !statusBox || !modalEl || !consoleEl || !progressBar) {
         return;
     }
+
+    const deployModal = bootstrap.Modal.getOrCreateInstance(modalEl, {
+        backdrop: 'static',
+        keyboard: false,
+    });
 
     function setStatus(message, isError) {
         statusBox.className = isError ? 'small text-danger mt-2' : 'small text-muted mt-2';
         statusBox.textContent = message;
+    }
+
+    function clearConsole() {
+        consoleEl.textContent = '';
+    }
+
+    function logLine(text) {
+        const line = document.createElement('div');
+        line.className = 'deploy-log-line';
+        const time = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        line.textContent = '[' + time + '] ' + text;
+        consoleEl.appendChild(line);
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function setProgress(pct, options) {
+        const o = options || {};
+        const n = Math.max(0, Math.min(100, Math.round(pct)));
+        progressBar.style.width = n + '%';
+        progressBar.setAttribute('aria-valuenow', String(n));
+        progressBar.classList.remove('bg-success', 'bg-danger', 'bg-warning', 'progress-bar-striped', 'progress-bar-animated');
+        if (o.variant) {
+            progressBar.classList.add(o.variant);
+        }
+        if (o.striped) {
+            progressBar.classList.add('progress-bar-striped', 'progress-bar-animated');
+        }
+    }
+
+    function setModalBusy(busy) {
+        const dis = !!busy;
+        button.disabled = dis;
+        if (closeBtn) {
+            closeBtn.disabled = dis;
+        }
+        if (dismissX) {
+            dismissX.disabled = dis;
+        }
     }
 
     async function postJson(url) {
@@ -102,37 +190,112 @@
                 },
             });
         } catch (_networkError) {
-            throw new Error('Не удалось связаться с сервером.');
+            const err = new Error('Не удалось связаться с сервером.');
+            err.network = true;
+            throw err;
         }
 
         const payload = await response.json().catch(function () { return {}; });
         if (!response.ok || payload.ok === false) {
-            throw new Error(payload.message || 'Ошибка запроса.');
+            const err = new Error(payload.message || 'Ошибка запроса.');
+            err.payload = payload;
+            err.status = response.status;
+            throw err;
         }
         return payload;
     }
 
     button.addEventListener('click', async function () {
-        button.disabled = true;
-        setStatus('Проверяем обновления в удаленном git-репозитории...', false);
+        clearConsole();
+        setProgress(0, { striped: true });
+        setModalBusy(true);
+        deployModal.show();
+        logLine('Старт: проверка обновлений в фоне (страница не перезагружается).');
+        setProgress(8, { striped: true });
 
         try {
+            logLine('Запрос: POST /settings/git/check-updates');
+            setProgress(22, { striped: true });
             const check = await postJson('/settings/git/check-updates');
-            if (!check.has_updates) {
-                setStatus(check.message || 'Обновлений нет.', false);
-                toastr.info(check.message || 'Обновлений нет.');
+            setProgress(48, { striped: true });
+
+            logLine('Ответ получен.');
+            if (check.check_method) {
+                logLine('Метод проверки: ' + check.check_method);
+            }
+            if (check.local_ref) {
+                logLine('Локальная метка: ' + check.local_ref + (check.local_ref_source ? ' (' + check.local_ref_source + ')' : ''));
+            }
+            if (check.remote_short || check.remote_ref) {
+                logLine('Удалённая ветка ' + (check.remote_branch || '') + ': ' + (check.remote_short || check.remote_ref));
+            }
+            if (typeof check.behind_count === 'number') {
+                logLine('Коммитов впереди на GitHub: ' + check.behind_count);
+            }
+            if (check.message) {
+                logLine(check.message);
+            }
+
+            if (check.has_updates === null || check.has_updates === undefined) {
+                setProgress(100, { variant: 'bg-warning' });
+                setStatus(check.message || 'Укажите версию на сервере (deploy.json или DEPLOY_GIT_REF).', false);
+                toastr.warning(check.message || 'Нужна метка версии на сервере.');
+                logLine('Готово: нужна метка версии на сервере.');
                 return;
             }
 
-            setStatus((check.message || 'Найдены обновления.') + ' Скачиваем...', false);
+            if (!check.has_updates) {
+                setProgress(100, { variant: 'bg-success' });
+                setStatus(check.message || 'Обновлений нет.', false);
+                toastr.info(check.message || 'Обновлений нет.');
+                logLine('Готово: обновлений нет.');
+                return;
+            }
+
+            if (!check.can_pull) {
+                setProgress(100, { variant: 'bg-warning' });
+                logLine('На сервере нет git clone — автоматический pull недоступен.');
+                logLine('Выложите файлы вручную (FTP/SSH/CI) и обновите ref в storage/app/deploy.json.');
+                setStatus(
+                    (check.message || 'Есть обновления на GitHub.') + ' Выполните выкладку вручную и обновите deploy.json.',
+                    false
+                );
+                toastr.warning(check.message || 'Обновите файлы вручную.');
+                return;
+            }
+
+            logLine('Запрос: POST /settings/git/pull-updates (git pull --ff-only)');
+            setProgress(62, { striped: true });
             const pull = await postJson('/settings/git/pull-updates');
+            setProgress(100, { variant: 'bg-success' });
+            if (pull.message) {
+                logLine(pull.message);
+            }
+            if (pull.output) {
+                logLine('Вывод git:');
+                String(pull.output).split(/\r?\n/).forEach(function (ln) {
+                    if (ln.length) {
+                        logLine('  ' + ln);
+                    }
+                });
+            }
+            logLine('Готово.');
             setStatus(pull.message || 'Обновления успешно скачаны и применены.', false);
             toastr.success(pull.message || 'Обновления успешно скачаны и применены.');
         } catch (error) {
-            setStatus(error.message || 'Не удалось обновить репозиторий.', true);
-            toastr.error(error.message || 'Не удалось обновить репозиторий.');
+            setProgress(100, { variant: 'bg-danger' });
+            const msg = error.message || 'Не удалось выполнить операцию.';
+            logLine('Ошибка: ' + msg);
+            if (error.payload && error.payload.code) {
+                logLine('Код: ' + error.payload.code);
+            }
+            if (error.status) {
+                logLine('HTTP: ' + error.status);
+            }
+            setStatus(msg, true);
+            toastr.error(msg);
         } finally {
-            button.disabled = false;
+            setModalBusy(false);
         }
     });
 })();

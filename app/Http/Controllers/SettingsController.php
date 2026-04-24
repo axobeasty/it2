@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Settings;
 use App\Support\DatabaseProfileManager;
+use App\Support\DeployVersion;
+use App\Support\GitHubDeployApi;
 use Brian2694\Toastr\Facades\Toastr;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Process\Exception\ProcessFailedException;
@@ -750,40 +752,19 @@ class SettingsController extends Controller
             ], 403);
         }
 
-        try {
-            $basePath = base_path();
-            $this->runGitProcess(['git', 'fetch', '--prune'], $basePath);
+        $result = $this->computeUpdateAvailability();
 
-            $upstreamBranch = $this->runGitProcess(
-                ['git', 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
-                $basePath
-            )->getOutput();
-            $upstreamBranch = trim($upstreamBranch);
-            if ($upstreamBranch === '') {
-                throw new \RuntimeException('Для текущей ветки не найден upstream-репозиторий.');
-            }
-
-            $behindCountRaw = $this->runGitProcess(
-                ['git', 'rev-list', '--count', "HEAD..{$upstreamBranch}"],
-                $basePath
-            )->getOutput();
-            $behindCount = (int) trim($behindCountRaw);
-
-            return response()->json([
-                'ok' => true,
-                'has_updates' => $behindCount > 0,
-                'behind_count' => $behindCount,
-                'upstream' => $upstreamBranch,
-                'message' => $behindCount > 0
-                    ? "Найдены обновления: {$behindCount} коммит(ов)."
-                    : 'Локальный репозиторий уже актуален.',
-            ]);
-        } catch (\Throwable $e) {
+        if (! ($result['ok'] ?? false)) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Не удалось проверить обновления: '.$e->getMessage(),
+                'code' => $result['code'] ?? null,
+                'message' => $result['message'] ?? 'Не удалось проверить обновления.',
             ], 422);
         }
+
+        unset($result['ok']);
+
+        return response()->json(array_merge(['ok' => true], $result));
     }
 
     public function pullGitUpdates(Request $request)
@@ -803,8 +784,17 @@ class SettingsController extends Controller
             ], 403);
         }
 
+        $basePath = base_path();
+        if (! DeployVersion::isGitWorkingTree($basePath)) {
+            return response()->json([
+                'ok' => false,
+                'code' => 'pull_requires_git_clone',
+                'message' => 'Автоматическое скачивание (git pull) из панели возможно только если проект на сервере развёрнут как git clone (есть каталог .git). '
+                    .'При загрузке по FTP обновите файлы вручную и укажите commit в storage/app/deploy.json (поле ref), чтобы проверка через GitHub снова работала.',
+            ], 422);
+        }
+
         try {
-            $basePath = base_path();
             $statusProcess = $this->runGitProcess(['git', 'status', '--porcelain'], $basePath);
             if (trim($statusProcess->getOutput()) !== '') {
                 return response()->json([
@@ -813,7 +803,7 @@ class SettingsController extends Controller
                 ], 422);
             }
 
-            $check = $this->checkGitUpdates($request)->getData(true);
+            $check = $this->computeUpdateAvailability();
             if (! ($check['ok'] ?? false)) {
                 return response()->json([
                     'ok' => false,
@@ -821,11 +811,11 @@ class SettingsController extends Controller
                 ], 422);
             }
 
-            if (! ($check['has_updates'] ?? false)) {
+            if (($check['has_updates'] ?? false) !== true) {
                 return response()->json([
                     'ok' => true,
                     'updated' => false,
-                    'message' => 'Обновлений нет. Репозиторий уже актуален.',
+                    'message' => $check['message'] ?? 'Обновлений нет. Репозиторий уже актуален.',
                 ]);
             }
 
@@ -840,9 +830,159 @@ class SettingsController extends Controller
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Ошибка при получении обновлений: '.$e->getMessage(),
+                'message' => $this->formatGitOperationError('Ошибка при получении обновлений', $e),
             ], 422);
         }
+    }
+
+    /**
+     * @return array{ok: bool, code?: string, message?: string, has_updates?: bool|null, behind_count?: int|null, can_pull?: bool, check_method?: string, ...}
+     */
+    private function computeUpdateAvailability(): array
+    {
+        $basePath = base_path();
+        if (DeployVersion::isGitWorkingTree($basePath)) {
+            return $this->computeUpdateAvailabilityViaLocalGit($basePath);
+        }
+
+        return $this->computeUpdateAvailabilityViaGitHub($basePath);
+    }
+
+    private function computeUpdateAvailabilityViaLocalGit(string $basePath): array
+    {
+        try {
+            $this->runGitProcess(['git', 'fetch', '--prune'], $basePath);
+
+            $upstreamBranch = $this->runGitProcess(
+                ['git', 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+                $basePath
+            )->getOutput();
+            $upstreamBranch = trim($upstreamBranch);
+            if ($upstreamBranch === '') {
+                throw new \RuntimeException('Для текущей ветки не найден upstream-репозиторий.');
+            }
+
+            $behindCountRaw = $this->runGitProcess(
+                ['git', 'rev-list', '--count', "HEAD..{$upstreamBranch}"],
+                $basePath
+            )->getOutput();
+            $behindCount = (int) trim($behindCountRaw);
+
+            $headSha = trim($this->runGitProcess(['git', 'rev-parse', 'HEAD'], $basePath)->getOutput());
+
+            return [
+                'ok' => true,
+                'has_updates' => $behindCount > 0,
+                'behind_count' => $behindCount,
+                'upstream' => $upstreamBranch,
+                'local_ref' => $headSha !== '' ? $headSha : null,
+                'local_ref_source' => 'git_head',
+                'can_pull' => true,
+                'check_method' => 'git',
+                'message' => $behindCount > 0
+                    ? "Найдены обновления: {$behindCount} коммит(ов)."
+                    : 'Локальный репозиторий уже актуален.',
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'ok' => false,
+                'message' => $this->formatGitOperationError('Не удалось проверить обновления', $e),
+            ];
+        }
+    }
+
+    private function computeUpdateAvailabilityViaGitHub(string $basePath): array
+    {
+        $repoSpec = (string) config('deploy.github_repo', '');
+        $branch = (string) config('deploy.github_branch', 'master');
+        $token = config('deploy.github_token');
+        $token = is_string($token) ? $token : null;
+
+        $parsed = GitHubDeployApi::parseRepo($repoSpec);
+        if ($parsed === null) {
+            return [
+                'ok' => false,
+                'code' => 'invalid_repo_config',
+                'message' => 'Укажите репозиторий в .env: DEPLOY_GITHUB_REPO=владелец/имя (например axobeasty/it2).',
+            ];
+        }
+
+        $tip = GitHubDeployApi::branchTip($parsed['owner'], $parsed['repo'], $branch, $token);
+        if ($tip === null) {
+            return [
+                'ok' => false,
+                'code' => 'github_unreachable',
+                'message' => 'Не удалось получить данные с GitHub (ветка «'.$branch.'», репозиторий «'.$repoSpec.'»). '
+                    .'Проверьте имя репозитория и ветку. Для приватного репозитория задайте DEPLOY_GITHUB_TOKEN с правом read на код.',
+            ];
+        }
+
+        $local = DeployVersion::resolveLocalRef($basePath);
+        if ($local['ref'] === null) {
+            return [
+                'ok' => true,
+                'has_updates' => null,
+                'comparison_skipped' => true,
+                'behind_count' => null,
+                'local_ref' => null,
+                'local_ref_source' => 'none',
+                'remote_ref' => $tip['sha'],
+                'remote_short' => $tip['short'],
+                'remote_branch' => $branch,
+                'remote_compare_url' => $tip['html_url'],
+                'can_pull' => false,
+                'check_method' => 'github_api',
+                'message' => 'Чтобы сравнивать версии без git clone на сервере, зафиксируйте текущий commit после деплоя: '
+                    .'создайте файл '.DeployVersion::deployJsonPath().' с содержимым вида {"ref":"<полный или короткий SHA>"} '
+                    .'или задайте DEPLOY_GIT_REF в .env. Последний commit на '.$branch.': '.$tip['short'].'.',
+            ];
+        }
+
+        $cmp = GitHubDeployApi::compare($parsed['owner'], $parsed['repo'], $local['ref'], $branch, $token);
+        if ($cmp === null) {
+            return [
+                'ok' => false,
+                'code' => 'github_compare_failed',
+                'message' => 'Не удалось сравнить версии с GitHub. Проверьте, что ref в deploy.json или DEPLOY_GIT_REF — существующий commit в репозитории «'.$repoSpec.'».',
+            ];
+        }
+
+        $hasUpdates = ($cmp['ahead_by'] > 0) || ($cmp['status'] === 'diverged');
+        $msg = 'Код на сервере по метке деплоя совпадает с веткой '.$branch.'.';
+        if ($hasUpdates) {
+            if ($cmp['status'] === 'diverged') {
+                $msg = 'Ветка '.$branch.' и метка на сервере разошлись (diverged). Обновляйте вручную или разберите расхождение. На GitHub впереди на '.$cmp['ahead_by'].' коммит(ов).';
+            } else {
+                $msg = 'Доступны обновления на GitHub: '.$cmp['ahead_by'].' коммит(ов) в ветке '.$branch.'.';
+            }
+        }
+
+        return [
+            'ok' => true,
+            'has_updates' => $hasUpdates,
+            'behind_count' => $cmp['ahead_by'],
+            'compare_status' => $cmp['status'],
+            'local_ref' => $local['ref'],
+            'local_ref_source' => $local['source'],
+            'remote_ref' => $tip['sha'],
+            'remote_short' => $tip['short'],
+            'remote_branch' => $branch,
+            'remote_compare_url' => $cmp['html_url'],
+            'can_pull' => false,
+            'check_method' => 'github_api',
+            'message' => $msg,
+        ];
+    }
+
+    private function formatGitOperationError(string $prefix, \Throwable $e): string
+    {
+        $msg = $e->getMessage();
+        if (stripos($msg, 'not a git repository') !== false) {
+            return $prefix.': на сервере нет Git-репозитория в каталоге приложения. '
+                .'Нужен полноценный clone с папкой .git или обновляйте файлы другим способом.';
+        }
+
+        return $prefix.': '.$msg;
     }
 
     private function streamEvent(string $type, int $percent, string $message): void
