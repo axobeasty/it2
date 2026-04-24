@@ -6,6 +6,8 @@ use App\Models\Settings;
 use App\Support\DatabaseProfileManager;
 use Brian2694\Toastr\Facades\Toastr;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Process;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -731,6 +733,118 @@ class SettingsController extends Controller
         ];
     }
 
+    public function checkGitUpdates(Request $request)
+    {
+        if (! $request->session()->has('user')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Необходима авторизация.',
+            ], 401);
+        }
+
+        $user = $request->session()->get('user');
+        if (! $user->canAccessPage('settings')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
+            ], 403);
+        }
+
+        try {
+            $basePath = base_path();
+            $this->runGitProcess(['git', 'fetch', '--prune'], $basePath);
+
+            $upstreamBranch = $this->runGitProcess(
+                ['git', 'rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+                $basePath
+            )->getOutput();
+            $upstreamBranch = trim($upstreamBranch);
+            if ($upstreamBranch === '') {
+                throw new \RuntimeException('Для текущей ветки не найден upstream-репозиторий.');
+            }
+
+            $behindCountRaw = $this->runGitProcess(
+                ['git', 'rev-list', '--count', "HEAD..{$upstreamBranch}"],
+                $basePath
+            )->getOutput();
+            $behindCount = (int) trim($behindCountRaw);
+
+            return response()->json([
+                'ok' => true,
+                'has_updates' => $behindCount > 0,
+                'behind_count' => $behindCount,
+                'upstream' => $upstreamBranch,
+                'message' => $behindCount > 0
+                    ? "Найдены обновления: {$behindCount} коммит(ов)."
+                    : 'Локальный репозиторий уже актуален.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Не удалось проверить обновления: '.$e->getMessage(),
+            ], 422);
+        }
+    }
+
+    public function pullGitUpdates(Request $request)
+    {
+        if (! $request->session()->has('user')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Необходима авторизация.',
+            ], 401);
+        }
+
+        $user = $request->session()->get('user');
+        if (! $user->canAccessPage('settings')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
+            ], 403);
+        }
+
+        try {
+            $basePath = base_path();
+            $statusProcess = $this->runGitProcess(['git', 'status', '--porcelain'], $basePath);
+            if (trim($statusProcess->getOutput()) !== '') {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Есть локальные незакоммиченные изменения. Сначала сохраните или закоммитьте их.',
+                ], 422);
+            }
+
+            $check = $this->checkGitUpdates($request)->getData(true);
+            if (! ($check['ok'] ?? false)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $check['message'] ?? 'Не удалось проверить обновления.',
+                ], 422);
+            }
+
+            if (! ($check['has_updates'] ?? false)) {
+                return response()->json([
+                    'ok' => true,
+                    'updated' => false,
+                    'message' => 'Обновлений нет. Репозиторий уже актуален.',
+                ]);
+            }
+
+            $pullProcess = $this->runGitProcess(['git', 'pull', '--ff-only'], $basePath);
+
+            return response()->json([
+                'ok' => true,
+                'updated' => true,
+                'message' => 'Обновления успешно скачаны и применены.',
+                'output' => trim($pullProcess->getOutput()),
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Ошибка при получении обновлений: '.$e->getMessage(),
+            ], 422);
+        }
+    }
+
     private function streamEvent(string $type, int $percent, string $message): void
     {
         echo json_encode([
@@ -749,5 +863,17 @@ class SettingsController extends Controller
     {
         $defaultConnection = (string) config('database.default', 'sqlite');
         return $defaultConnection === 'mysql_remote' ? 'remote' : 'sqlite';
+    }
+
+    private function runGitProcess(array $command, string $cwd): Process
+    {
+        $process = new Process($command, $cwd, null, null, 60);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        return $process;
     }
 }

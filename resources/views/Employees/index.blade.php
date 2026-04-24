@@ -219,7 +219,7 @@
                                                         <div class="mb-3">
                                                             <label for="exampleInputEmail1" class="form-label">Подразделение</label>
                                                             <select class="form-select " name="department_id">
-                                                                <option selected value="{{$employee->department_id}}">{{ optional(\App\Models\Department::find($employee->department_id))->title }}</option>
+                                                                <option selected value="{{$employee->department_id}}">{{ optional($employee->department)->title }}</option>
                                                                 @foreach ($departments as $dep)
                                                                     @if($employee->department_id != $dep->id)
                                                                         <option value="{{$dep->id}}">{{$dep->title}}</option>
@@ -331,9 +331,9 @@
                             </div>
                         </div>
                     </td>
-                    <td>{{ optional(\App\Models\Department::find($employee->department_id))->title }}</td>
+                    <td>{{ optional($employee->department)->title }}</td>
                     <td>{{$employee->room}}</td>
-                    <td>@if($employee->active == 1) <a href="/employees/deactivate/{{$employee->id}}"><span class="badge text-bg-success">Активен</span></a>@else <a href="/employees/activate/{{$employee->id}}"><span class="badge text-bg-secondary">Неактивен</span></a> @endif <span class="badge text-bg-light border">{{ optional(\App\Models\Roles::find($employee->role_id))->name }}</span></td>
+                    <td>@if($employee->active == 1) <a href="/employees/deactivate/{{$employee->id}}"><span class="badge text-bg-success">Активен</span></a>@else <a href="/employees/activate/{{$employee->id}}"><span class="badge text-bg-secondary">Неактивен</span></a> @endif <span class="badge text-bg-light border">{{ optional($employee->role)->name }}</span></td>
                     <td>
                         <div class="text-end">
 
@@ -378,37 +378,10 @@
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.13.14/dist/js/bootstrap-select.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
-<script src="https://cdn.datatables.net/2.3.1/js/dataTables.min.js"></script>
 <script>
-    let table = new DataTable('#myTable', {
-        language: {
-            processing: 'Обработка...',
-            search: 'Поиск:',
-            lengthMenu: 'Показывать _MENU_ записей',
-            info: 'Показаны записи с _START_ по _END_ из _TOTAL_',
-            infoEmpty: 'Показаны записи с 0 по 0 из 0',
-            infoFiltered: '(отфильтровано из _MAX_ записей)',
-            loadingRecords: 'Загрузка...',
-            zeroRecords: 'Записи не найдены',
-            emptyTable: 'В таблице отсутствуют данные',
-            paginate: {
-                first: 'Первая',
-                previous: 'Предыдущая',
-                next: 'Следующая',
-                last: 'Последняя'
-            },
-            aria: {
-                sortAscending: ': активируйте для сортировки столбца по возрастанию',
-                sortDescending: ': активируйте для сортировки столбца по убыванию'
-            }
-        }
-    });
-
     document.addEventListener('DOMContentLoaded', function () {
         const studentRoleId = {{ (int) ($studentRoleId ?? 0) }};
 
@@ -435,8 +408,10 @@
         });
     });
 </script>
-<script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
 <script src="https://cdn.bootcss.com/toastr.js/latest/js/toastr.min.js"></script>
 {!! Toastr::message() !!}
+<div class="container pb-4 d-flex justify-content-end">
+    {{ $employees->links() }}
+</div>
 </body>
 </html>

@@ -138,7 +138,7 @@
                                        {{ $order->category->name }}
                                     </span>
                                             </td>
-                                            <td>{{ optional(\App\Models\Employee::find($order->employee_id))->fio }}</td>
+                                            <td>{{ optional($order->employee)->fio }}</td>
                                             <td>{{ $order->room ?? '—' }}</td>
 
                                             <td>
@@ -197,7 +197,7 @@
                                                                             </div>
                                                                             <div class="mb-3">
                                                                                 <label for="exampleInputEmail1" class="form-label fw-bold">Сотрудник</label>
-                                                                                <p class="">  {{ optional(\App\Models\Employee::find($order->employee_id))->fio }}</p>
+                                                                                <p class="">  {{ optional($order->employee)->fio }}</p>
 
                                                                             </div>
                                                                             <div class="mb-3">
@@ -354,37 +354,7 @@
             updateCharCount();
         });
         $(document).ready(function () {
-            $('#ordersTable').DataTable({
-                "language": {
-                    "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/ru.json",
-                    "search": "Поиск: ",
-                    "searchPlaceholder: ": "Введите текст...",
-                    "info": "Отображается _START_ - _END_ из _TOTAL_ записей",
-                    "lengthMenu":     "Показывать _MENU_ записей",
-                    paginate: {
-                        "first":      "Первый",
-                        "last":       "Последний",
-                        "next":       "Следующий",
-                        "previous":   "Предыдущий"
-                    },
-                    "emptyTable":     "Заявок пока нет.",
-                    "infoEmpty":      "",
-                    "zeroRecords":    "Ни одной записи не найдено!",
-                },
-                "pageLength": 10,
-                "order": [[0, "desc"]],
-                "lengthMenu": [5, 10, 25, 50],
-                "responsive": true,
-                "info": "Показано с _START_ по _END_ из _TOTAL_ записей",
-                "search": "Поиск:",
-                "zeroRecords": "Записи не найдены",
-                "paginate": {
-                    "first": "Первая",
-                    "last": "Последняя",
-                    "next": "Следующая",
-                    "previous": "Предыдущая"
-                }
-            });
+            // Server-side pagination is handled by Laravel to avoid loading every row into the browser.
         });
         function printTable() {
             const printWindow = window.open('', '', 'height=600,width=800');
@@ -422,6 +392,9 @@
             XLSX.writeFile(workbook, `заявки_${new Date().toISOString().slice(0, 10)}.xlsx`);
         }
     </script>
+    <div class="mt-3 d-flex justify-content-end">
+        {{ $orders->links() }}
+    </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/js/bootstrap-select.min.js"></script>
 </body>

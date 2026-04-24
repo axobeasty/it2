@@ -101,6 +101,9 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="d-flex justify-content-end mt-3">
+                    {{ $employeePages->links() }}
+                </div>
             </div>
         </div>
     </div>

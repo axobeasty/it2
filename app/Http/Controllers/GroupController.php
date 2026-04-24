@@ -15,7 +15,11 @@ class GroupController extends Controller
     {
         $user = $request->session()->get('user');
         $settings = Settings::where('id',1)->first();
-        $groups = Groups::withCount('students')->orderBy('name')->get();
+        $groups = Groups::withCount('students')
+            ->with(['students' => fn ($query) => $query->select('id', 'fio', 'group_id')->orderBy('fio')])
+            ->orderBy('name')
+            ->paginate(20)
+            ->withQueryString();
         $students = Employee::whereHas('role', function ($query) {
             $query->where('name', 'Студент');
         })->orderBy('fio')->get();

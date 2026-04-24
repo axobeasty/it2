@@ -24,7 +24,10 @@ class EmployeeController extends Controller
            $user = $request->session()->get('user');
            $settings = Settings::where('id',1)->first();
            $departments = Department::all();
-           $employees = Employee::all();
+           $employees = Employee::with(['department:id,title', 'role:id,name'])
+               ->orderBy('fio')
+               ->paginate(25)
+               ->withQueryString();
            $roles = Roles::all();
            $groups = Groups::orderBy('name')->get();
            $faculties = Faculty::orderBy('name')->get();

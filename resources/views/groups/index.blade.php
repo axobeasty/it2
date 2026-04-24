@@ -110,6 +110,9 @@
                 </tbody>
             </table>
         </div>
+        <div class="d-flex justify-content-end mt-3">
+            {{ $groups->links() }}
+        </div>
     </div>
 </div>
 

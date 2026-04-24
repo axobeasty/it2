@@ -128,9 +128,12 @@ try{
         if($request->session()->has('user')){
             if($user->canAccessPage('orders_admin')){
                 $settings = Settings::where('id',1)->first();
-                $employees = Employee::all();
+                $employees = Employee::orderBy('fio')->get();
                 $O_categories = O_Categories::all();
-                $orders = Orders::with('category', 'employee:id,fio')->get();
+                $orders = Orders::with(['category:id,name,cat_color,color', 'employee:id,fio'])
+                    ->orderByDesc('id')
+                    ->paginate(25)
+                    ->withQueryString();
                 return view('orders.administration',compact('user','settings','orders','employees','O_categories'));
             }else{
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);

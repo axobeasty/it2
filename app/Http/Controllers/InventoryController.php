@@ -46,13 +46,24 @@ class InventoryController extends Controller
             $user = $request->session()->get('user');
 
             if($user->canAccessPage('inventory_admin')){
-                $numbers = InvNumbers::with(['store.type', 'employee'])->orderByDesc('id')->get();
-                $employees = Employee::all();
-                $groupedByEmployee = $numbers
+                $employeePages = InvNumbers::query()
                     ->whereNull('date_out')
-                    ->groupBy('employees_id');
+                    ->select('employees_id')
+                    ->groupBy('employees_id')
+                    ->orderBy('employees_id')
+                    ->paginate(20)
+                    ->withQueryString();
+                $employeeIds = collect($employeePages->items())->pluck('employees_id')->all();
+                $numbers = InvNumbers::with(['store.type', 'employee'])
+                    ->whereNull('date_out')
+                    ->whereIn('employees_id', $employeeIds)
+                    ->orderBy('employees_id')
+                    ->orderBy('id')
+                    ->get();
+                $employees = Employee::all();
+                $groupedByEmployee = $numbers->groupBy('employees_id');
 
-                return view('inventory.manage', compact('user','settings','employees','numbers','groupedByEmployee'));
+                return view('inventory.manage', compact('user','settings','employees','numbers','groupedByEmployee', 'employeePages'));
             }else{
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
                 return redirect('/');
@@ -336,16 +347,9 @@ class InventoryController extends Controller
             return redirect('/');
         }
 
-        $numbers = InvNumbers::with(['store.type', 'employee'])
-            ->whereNull('date_out')
-            ->orderBy('employees_id')
-            ->orderBy('id')
-            ->get();
-
-        $groupedByEmployee = $numbers->groupBy('employees_id');
         $fileName = 'inventory_print_'.now()->format('Y-m-d_H-i').'.csv';
 
-        return response()->streamDownload(function () use ($groupedByEmployee) {
+        return response()->streamDownload(function () {
             $output = fopen('php://output', 'w');
             fwrite($output, "\xEF\xBB\xBF");
 
@@ -361,27 +365,29 @@ class InventoryController extends Controller
                 'Подпись',
             ], ';');
 
-            foreach ($groupedByEmployee as $employeeId => $items) {
-                $employee = $items->first()->employee;
-                $index = 1;
-
-                foreach ($items as $item) {
-                    fputcsv($output, [
-                        $index === 1 ? ($employee->fio ?? '—') : '',
-                        $index === 1 ? $employeeId : '',
-                        $index,
-                        $item->store->name ?? 'Без названия',
-                        $item->number ?? '',
-                        $item->room ?? '',
-                        $item->date_in ?? '',
-                        '',
-                        '',
-                    ], ';');
-                    $index++;
-                }
-
-                fputcsv($output, ['', '', '', '', '', '', '', '', ''], ';');
-            }
+            $counters = [];
+            InvNumbers::query()
+                ->with(['store:id,name', 'employee:id,fio'])
+                ->whereNull('date_out')
+                ->orderBy('employees_id')
+                ->orderBy('id')
+                ->chunkById(500, function ($chunk) use (&$counters, $output) {
+                    foreach ($chunk as $item) {
+                        $employeeId = (int) $item->employees_id;
+                        $counters[$employeeId] = ($counters[$employeeId] ?? 0) + 1;
+                        fputcsv($output, [
+                            optional($item->employee)->fio ?? '—',
+                            $employeeId ?: '—',
+                            $counters[$employeeId],
+                            optional($item->store)->name ?? 'Без названия',
+                            $item->number ?? '',
+                            $item->room ?? '',
+                            $item->date_in ?? '',
+                            '',
+                            '',
+                        ], ';');
+                    }
+                });
 
             fclose($output);
         }, $fileName, [
@@ -460,11 +466,8 @@ class InventoryController extends Controller
                 $new ->save();
                 if($request->employee_ids != null){
                     try{
-                        foreach (array($request->employee_ids) as $item){
-                            $employee = Employee::where('id',$item)->first();
-                            $employee->department_id = $new->id;
-                            $employee->save();
-                        }
+                        Employee::whereIn('id', array_map('intval', (array) $request->employee_ids))
+                            ->update(['department_id' => $new->id]);
                     }catch (\Exception $exception){
                         Toastr::error('Не удалось привязать сотрудников к созданному подразделению '.$exception->getMessage(), 'Ошибка!', ["progressBar"=> true]);
                     }
@@ -487,14 +490,7 @@ class InventoryController extends Controller
         $user = $request->session()->get('user');
         if($request->session()->has('user')){
             if($user->canAccessPage('inventory_admin') ){
-                $users = Employee::all();
-                foreach ($users as $user){
-                    if($user->department_id ==$id){
-                        $user->department_id = 1;
-                        $user->save();
-                        Toastr::info($user->fio.' был автоматически перенесен в Основное подразделение', 'Корректировка', ["progressBar" => true]);
-                    }
-                }
+                Employee::where('department_id', $id)->update(['department_id' => 1]);
                 $dep = Department::where('id',$id)->first();
                 $dep->delete();
                 Toastr::success('Подразделение успешно удалено', 'Готово', ["progressBar" => true]);
@@ -518,11 +514,8 @@ class InventoryController extends Controller
                 $editer->title = $request->title;
                 if($request->employee_ids != null){
                     try{
-                        foreach (array($request->employee_ids) as $item){
-                            $employee = Employee::where('id',$item)->first();
-                            $employee->department_id = $id;
-                            $employee->save();
-                        }
+                        Employee::whereIn('id', array_map('intval', (array) $request->employee_ids))
+                            ->update(['department_id' => $id]);
                     }catch (\Exception $exception){
                         Toastr::error('Не удалось привязать сотрудников к подразделению '.$exception->getMessage(), 'Ошибка!', ["progressBar"=> true]);
                     }

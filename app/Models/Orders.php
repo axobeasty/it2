@@ -7,8 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Orders extends Model
 {
-    protected $table = 'orders'; // укажи явно, если не orders
-    protected $fillable = ['description', 'category_id', 'employees_id', 'status', 'room', 'file_path'];
+    protected $table = 'orders';
+    protected $fillable = ['description', 'category_id', 'employee_id', 'status', 'room', 'file_path'];
     public function category()
     {
         return $this->belongsTo(O_Categories::class, 'category_id');
@@ -16,7 +16,7 @@ class Orders extends Model
 
     public function employee()
     {
-        return $this->belongsTo(Employee::class, 'employees_id','id');
+        return $this->belongsTo(Employee::class, 'employee_id', 'id');
     }
     public function get_fio()
     {

@@ -55,9 +55,20 @@
                 <div class="pt-5 d-flex justify-content-start"><button type="submit" class="btn btn-dark ">Сохранить изменения</button></div>
             </form>
 
-
-
-
+            <hr class="my-4">
+            <div class="row">
+                <div class="col-2">
+                    <p class="lead p-1">Git обновления</p>
+                </div>
+                <div class="col">
+                    <button type="button" class="btn btn-outline-primary" id="btn-git-check-and-pull">
+                        Проверить изменения в git репозитории
+                    </button>
+                    <div class="small text-muted mt-2" id="git-update-status">
+                        Нажмите кнопку, чтобы проверить и скачать обновления из удаленного репозитория.
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -65,6 +76,67 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
 <script src="https://cdn.bootcss.com/jquery/2.2.4/jquery.min.js"></script>
 <script src="https://cdn.bootcss.com/toastr.js/latest/js/toastr.min.js"></script>
+<script>
+(function () {
+    const button = document.getElementById('btn-git-check-and-pull');
+    const statusBox = document.getElementById('git-update-status');
+    const csrf = '{{ csrf_token() }}';
+
+    if (!button || !statusBox) {
+        return;
+    }
+
+    function setStatus(message, isError) {
+        statusBox.className = isError ? 'small text-danger mt-2' : 'small text-muted mt-2';
+        statusBox.textContent = message;
+    }
+
+    async function postJson(url) {
+        let response;
+        try {
+            response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'Accept': 'application/json',
+                },
+            });
+        } catch (_networkError) {
+            throw new Error('Не удалось связаться с сервером.');
+        }
+
+        const payload = await response.json().catch(function () { return {}; });
+        if (!response.ok || payload.ok === false) {
+            throw new Error(payload.message || 'Ошибка запроса.');
+        }
+        return payload;
+    }
+
+    button.addEventListener('click', async function () {
+        button.disabled = true;
+        setStatus('Проверяем обновления в удаленном git-репозитории...', false);
+
+        try {
+            const check = await postJson('/settings/git/check-updates');
+            if (!check.has_updates) {
+                setStatus(check.message || 'Обновлений нет.', false);
+                toastr.info(check.message || 'Обновлений нет.');
+                return;
+            }
+
+            setStatus((check.message || 'Найдены обновления.') + ' Скачиваем...', false);
+            const pull = await postJson('/settings/git/pull-updates');
+            setStatus(pull.message || 'Обновления успешно скачаны и применены.', false);
+            toastr.success(pull.message || 'Обновления успешно скачаны и применены.');
+        } catch (error) {
+            setStatus(error.message || 'Не удалось обновить репозиторий.', true);
+            toastr.error(error.message || 'Не удалось обновить репозиторий.');
+        } finally {
+            button.disabled = false;
+        }
+    });
+})();
+</script>
 {!! Toastr::message() !!}
 </body>
 </html>

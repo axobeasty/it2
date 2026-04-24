@@ -5,6 +5,7 @@ namespace App\Support;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 use Throwable;
 
@@ -69,16 +70,28 @@ class DatabaseProfileManager
                     continue;
                 }
 
-                $rows = DB::connection($sourceConnection)->table($tableName)->get()->map(
-                    static fn ($row) => (array) $row
-                )->all();
-
                 DB::connection($targetConnection)->table($tableName)->truncate();
-
-                if (! empty($rows)) {
-                    foreach (array_chunk($rows, 500) as $chunk) {
-                        DB::connection($targetConnection)->table($tableName)->insert($chunk);
-                    }
+                $copiedRows = 0;
+                $sourceTableQuery = DB::connection($sourceConnection)->table($tableName);
+                if (Schema::connection($sourceConnection)->hasColumn($tableName, 'id')) {
+                    $sourceTableQuery
+                        ->orderBy('id')
+                        ->chunkById(500, function ($chunk) use ($targetConnection, $tableName, &$copiedRows) {
+                            $rows = $chunk->map(static fn ($row) => (array) $row)->all();
+                            if ($rows !== []) {
+                                DB::connection($targetConnection)->table($tableName)->insert($rows);
+                                $copiedRows += count($rows);
+                            }
+                        });
+                } else {
+                    $sourceTableQuery
+                        ->chunk(500, function ($chunk) use ($targetConnection, $tableName, &$copiedRows) {
+                            $rows = $chunk->map(static fn ($row) => (array) $row)->all();
+                            if ($rows !== []) {
+                                DB::connection($targetConnection)->table($tableName)->insert($rows);
+                                $copiedRows += count($rows);
+                            }
+                        });
                 }
 
                 $processed++;
@@ -86,7 +99,7 @@ class DatabaseProfileManager
                 $this->notify(
                     $progress,
                     min($percent, 95),
-                    "Таблица {$tableName}: перенесено строк ".count($rows).'.'
+                    "Таблица {$tableName}: перенесено строк {$copiedRows}."
                 );
             }
 

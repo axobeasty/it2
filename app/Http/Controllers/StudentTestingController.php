@@ -329,13 +329,12 @@ class StudentTestingController extends Controller
     public function statsExport(Request $request)
     {
         $data = $this->collectTestingStats($request);
-        $attempts = $data['attempts'];
         $statsByGroup = $data['statsByGroup'];
         $filterLabel = $data['filterLabel'];
 
         $fileName = 'statistika_testov_'.now()->format('Y-m-d_H-i').'.csv';
 
-        return response()->streamDownload(function () use ($attempts, $statsByGroup, $filterLabel) {
+        return response()->streamDownload(function () use ($request, $statsByGroup, $filterLabel) {
             $output = fopen('php://output', 'w');
             fwrite($output, "\xEF\xBB\xBF");
 
@@ -349,20 +348,28 @@ class StudentTestingController extends Controller
             fputcsv($output, [], ';');
             fputcsv($output, ['Детализация попыток'], ';');
             fputcsv($output, ['Студент', 'Группа', 'Тест', 'Баллы', 'Макс. баллов', 'Процент', 'Оценка', 'Дата сдачи'], ';');
-            foreach ($attempts as $attempt) {
-                $at = $attempt->submitted_at ?? $attempt->created_at;
-                $atStr = $at ? Carbon::parse($at)->format('d.m.Y H:i') : '—';
-                fputcsv($output, [
-                    optional($attempt->student)->fio ?: '—',
-                    optional(optional($attempt->student)->group)->name ?: '—',
-                    optional($attempt->test)->title ?: '—',
-                    $attempt->score,
-                    $attempt->max_score,
-                    $attempt->percentage,
-                    $attempt->display_grade,
-                    $atStr,
-                ], ';');
-            }
+            $groupId = (int) $request->query('group_id', 0);
+            TestAttempt::query()
+                ->with(['test:id,title', 'student:id,fio,group_id', 'student.group:id,name'])
+                ->when($groupId > 0, fn ($q) => $q->where('group_id', $groupId))
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id')
+                ->chunkById(500, function ($chunk) use ($output) {
+                    foreach ($chunk as $attempt) {
+                        $at = $attempt->submitted_at ?? $attempt->created_at;
+                        $atStr = $at ? Carbon::parse($at)->format('d.m.Y H:i') : '—';
+                        fputcsv($output, [
+                            optional($attempt->student)->fio ?: '—',
+                            optional(optional($attempt->student)->group)->name ?: '—',
+                            optional($attempt->test)->title ?: '—',
+                            $attempt->score,
+                            $attempt->max_score,
+                            $attempt->percentage,
+                            $attempt->display_grade,
+                            $atStr,
+                        ], ';');
+                    }
+                });
 
             fclose($output);
         }, $fileName, [
@@ -386,27 +393,41 @@ class StudentTestingController extends Controller
     }
 
     /**
-     * @return array{groupId: int, attempts: \Illuminate\Support\Collection, statsByGroup: \Illuminate\Support\Collection, filterLabel: string}
+     * @return array{groupId: int, attempts: \Illuminate\Contracts\Pagination\LengthAwarePaginator, statsByGroup: \Illuminate\Support\Collection, filterLabel: string}
      */
     private function collectTestingStats(Request $request): array
     {
         $groupId = (int) $request->query('group_id', 0);
 
-        $attempts = TestAttempt::query()
+        $baseQuery = TestAttempt::query()
+            ->when($groupId > 0, fn ($q) => $q->where('group_id', $groupId));
+
+        $attempts = (clone $baseQuery)
             ->with(['test', 'student.group'])
-            ->when($groupId > 0, fn ($q) => $q->where('group_id', $groupId))
             ->orderByDesc('submitted_at')
             ->orderByDesc('id')
+            ->paginate(50)
+            ->withQueryString();
+
+        $statsByGroupRows = (clone $baseQuery)
+            ->leftJoin('groups', 'groups.id', '=', 'test_attempts.group_id')
+            ->selectRaw("COALESCE(groups.name, 'Без группы') as group_name")
+            ->selectRaw('COUNT(*) as attempts_count')
+            ->selectRaw('ROUND(AVG(test_attempts.percentage), 2) as avg_percentage')
+            ->selectRaw('ROUND(MIN(test_attempts.percentage), 2) as min_percentage')
+            ->selectRaw('ROUND(MAX(test_attempts.percentage), 2) as max_percentage')
+            ->groupBy('groups.name')
+            ->orderBy('group_name')
             ->get();
 
-        $statsByGroup = $attempts
-            ->groupBy(fn ($attempt) => optional($attempt->student->group)->name ?? 'Без группы')
-            ->map(fn ($items) => [
-                'count' => $items->count(),
-                'avg' => round($items->avg('percentage'), 2),
-                'max' => round($items->max('percentage'), 2),
-                'min' => round($items->min('percentage'), 2),
-            ]);
+        $statsByGroup = $statsByGroupRows->mapWithKeys(fn ($row) => [
+            $row->group_name => [
+                'count' => (int) $row->attempts_count,
+                'avg' => (float) $row->avg_percentage,
+                'min' => (float) $row->min_percentage,
+                'max' => (float) $row->max_percentage,
+            ],
+        ]);
 
         $filterLabel = 'Все группы';
         if ($groupId > 0) {
