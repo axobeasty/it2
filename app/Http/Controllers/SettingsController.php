@@ -821,12 +821,26 @@ class SettingsController extends Controller
 
             $pullProcess = $this->runGitProcess(['git', 'pull', '--ff-only'], $basePath);
 
-            return response()->json([
+            $headSha = trim($this->runGitProcess(['git', 'rev-parse', 'HEAD'], $basePath)->getOutput());
+            $persist = DeployVersion::tryPersistDeployRef($basePath, $headSha);
+
+            $payload = [
                 'ok' => true,
                 'updated' => true,
                 'message' => 'Обновления успешно скачаны и применены.',
                 'output' => trim($pullProcess->getOutput()),
-            ]);
+                'deploy_ref_saved' => $persist['saved'],
+                'current_ref' => $persist['saved'] ? $persist['ref'] : ($headSha !== '' ? $headSha : null),
+            ];
+            if ($persist['saved']) {
+                $payload['message'] .= ' Метка в storage/app/deploy.json обновлена на '.substr($persist['ref'], 0, 7).'.';
+            } elseif ($persist['skipped_env']) {
+                $payload['deploy_ref_note'] = 'deploy.json не меняли: задан DEPLOY_GIT_REF в .env (он важнее файла).';
+            } elseif ($persist['error'] !== null) {
+                $payload['deploy_ref_note'] = 'Не удалось обновить deploy.json: '.$persist['error'];
+            }
+
+            return response()->json($payload);
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
@@ -921,7 +935,7 @@ class SettingsController extends Controller
 
             $headSha = trim($this->runGitProcess(['git', 'rev-parse', 'HEAD'], $basePath)->getOutput());
 
-            return [
+            $row = [
                 'ok' => true,
                 'has_updates' => $behindCount > 0,
                 'behind_count' => $behindCount,
@@ -934,6 +948,20 @@ class SettingsController extends Controller
                     ? "Найдены обновления: {$behindCount} коммит(ов)."
                     : 'Локальный репозиторий уже актуален.',
             ];
+
+            if ($behindCount === 0 && $headSha !== '') {
+                $persist = DeployVersion::tryPersistDeployRef($basePath, $headSha);
+                $row['deploy_ref_saved'] = $persist['saved'];
+                if ($persist['saved']) {
+                    $row['deploy_ref_note'] = 'Метка в deploy.json синхронизирована с текущим HEAD ('.substr($persist['ref'], 0, 7).').';
+                } elseif ($persist['skipped_env']) {
+                    $row['deploy_ref_note'] = 'deploy.json не обновлялся: задан DEPLOY_GIT_REF в .env.';
+                } elseif ($persist['error'] !== null) {
+                    $row['deploy_ref_note'] = 'Не удалось записать deploy.json: '.$persist['error'];
+                }
+            }
+
+            return $row;
         } catch (\Throwable $e) {
             return [
                 'ok' => false,
@@ -1008,12 +1036,30 @@ class SettingsController extends Controller
             }
         }
 
+        $localRefOut = $local['ref'];
+        $deployRefSaved = false;
+        $deployRefNote = null;
+
+        if (! $hasUpdates && $cmp['status'] === 'identical') {
+            $persist = DeployVersion::tryPersistDeployRef($basePath, $tip['sha']);
+            $deployRefSaved = $persist['saved'];
+            if ($persist['saved']) {
+                $localRefOut = $persist['ref'];
+                $deployRefNote = 'Метка в deploy.json обновлена до commit с ветки '.$branch.' ('.$tip['short'].').';
+                $msg .= ' '.$deployRefNote;
+            } elseif ($persist['skipped_env']) {
+                $deployRefNote = 'deploy.json не меняли: задан DEPLOY_GIT_REF в .env.';
+            } elseif ($persist['error'] !== null) {
+                $deployRefNote = 'Не удалось записать deploy.json: '.$persist['error'];
+            }
+        }
+
         return [
             'ok' => true,
             'has_updates' => $hasUpdates,
             'behind_count' => $cmp['ahead_by'],
             'compare_status' => $cmp['status'],
-            'local_ref' => $local['ref'],
+            'local_ref' => $localRefOut,
             'local_ref_source' => $local['source'],
             'remote_ref' => $tip['sha'],
             'remote_short' => $tip['short'],
@@ -1022,6 +1068,8 @@ class SettingsController extends Controller
             'can_pull' => false,
             'check_method' => 'github_api',
             'message' => $msg,
+            'deploy_ref_saved' => $deployRefSaved,
+            'deploy_ref_note' => $deployRefNote,
         ];
     }
 

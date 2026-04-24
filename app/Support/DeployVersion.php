@@ -108,6 +108,32 @@ final class DeployVersion
         }
     }
 
+    /**
+     * Сохраняет ref в deploy.json, если версия не зафиксирована только через DEPLOY_GIT_REF в .env.
+     *
+     * @return array{saved: bool, ref: ?string, skipped_env: bool, error: ?string}
+     */
+    public static function tryPersistDeployRef(string $basePath, string $ref): array
+    {
+        $ref = strtolower(trim($ref));
+        if ($ref === '') {
+            return ['saved' => false, 'ref' => null, 'skipped_env' => false, 'error' => 'Пустой ref.'];
+        }
+
+        $resolved = self::resolveLocalRef($basePath);
+        if ($resolved['source'] === 'env') {
+            return ['saved' => false, 'ref' => null, 'skipped_env' => true, 'error' => null];
+        }
+
+        try {
+            self::writeDeployJson($ref);
+
+            return ['saved' => true, 'ref' => $ref, 'skipped_env' => false, 'error' => null];
+        } catch (\Throwable $e) {
+            return ['saved' => false, 'ref' => null, 'skipped_env' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     private static function gitHeadSha(string $basePath): ?string
     {
         try {

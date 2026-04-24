@@ -93,7 +93,7 @@
                     @endif
                     <div class="small text-muted mt-2" id="git-update-status">
                         Если на сервере есть <code>.git</code> — проверка через git и при необходимости <code>git pull</code>.
-                        Без <code>.git</code> сравнение идёт с GitHub: один раз укажите SHA того коммита, который реально залит (поле выше или файл <code>storage/app/deploy.json</code>).
+                        Без <code>.git</code> сравнение идёт с GitHub: при первой проверке укажите SHA залитого коммита; если метка совпадает с веткой, система сама обновит <code>deploy.json</code>. После <code>git pull</code> метка тоже записывается автоматически (если не задан только <code>DEPLOY_GIT_REF</code> в <code>.env</code>).
                     </div>
                 </div>
             </div>
@@ -331,6 +331,12 @@
             if (check.message) {
                 logLine(check.message);
             }
+            if (check.deploy_ref_note) {
+                logLine(check.deploy_ref_note);
+            }
+            if (check.deploy_ref_saved && check.local_ref && deployRefInput) {
+                deployRefInput.value = check.local_ref;
+            }
 
             if (check.has_updates === null || check.has_updates === undefined) {
                 setProgress(100, { variant: 'bg-warning' });
@@ -369,6 +375,12 @@
             setProgress(100, { variant: 'bg-success' });
             if (pull.message) {
                 logLine(pull.message);
+            }
+            if (pull.deploy_ref_note) {
+                logLine(pull.deploy_ref_note);
+            }
+            if (pull.deploy_ref_saved && pull.current_ref && deployRefInput) {
+                deployRefInput.value = pull.current_ref;
             }
             if (pull.output) {
                 logLine('Вывод git:');
