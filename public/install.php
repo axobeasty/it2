@@ -635,8 +635,10 @@ header('Content-Type: text/html; charset=utf-8');
     <link href="<?= installer_h($bootstrapCss) ?>" rel="stylesheet" crossorigin="anonymous">
     <link href="<?= installer_h($iconsCss) ?>" rel="stylesheet">
     <style>
+        /* Полноэкранно без прокрутки страницы; основной текст ~15px для комфортного чтения */
         html, body {
             height: 100%;
+            max-height: 100dvh;
             margin: 0;
             overflow: hidden;
             box-sizing: border-box;
@@ -645,6 +647,8 @@ header('Content-Type: text/html; charset=utf-8');
         body {
             background: #f5f7fb;
             font-family: 'Segoe UI', system-ui, sans-serif;
+            font-size: 0.9375rem;
+            line-height: 1.45;
             display: flex;
             flex-direction: column;
         }
@@ -653,7 +657,7 @@ header('Content-Type: text/html; charset=utf-8');
             width: 100%;
             max-width: 64rem;
             margin: 0 auto;
-            padding: 0.4rem 0.65rem 0.5rem;
+            padding: 0.5rem 0.85rem 0.6rem;
             display: flex;
             flex-direction: column;
             min-height: 0;
@@ -665,41 +669,42 @@ header('Content-Type: text/html; charset=utf-8');
             align-items: baseline;
             justify-content: space-between;
             gap: 0.5rem;
-            margin-bottom: 0.25rem;
+            margin-bottom: 0.2rem;
         }
         .header-title {
             font-weight: 600;
             color: #000;
-            font-size: 1.05rem;
+            font-size: 1.35rem;
             margin: 0;
-            line-height: 1.2;
+            line-height: 1.25;
         }
         .installer-lead {
-            font-size: 0.68rem;
-            color: #6c757d;
-            margin: 0.15rem 0 0.35rem;
-            line-height: 1.25;
-            max-height: 2.5em;
+            font-size: 0.875rem;
+            color: #5c636a;
+            margin: 0.2rem 0 0.45rem;
+            line-height: 1.4;
+            max-height: 2.8em;
             overflow: hidden;
         }
+        .installer-lead code { font-size: 0.9em; }
         .profile-tabs {
             display: flex;
-            gap: 6px;
+            gap: 8px;
             background: white;
             border-radius: 10px;
-            padding: 4px;
-            margin-bottom: 0.35rem;
+            padding: 5px;
+            margin-bottom: 0.45rem;
             flex: 0 0 auto;
         }
         .profile-tab {
             flex: 1;
             text-align: center;
-            padding: 6px 8px;
+            padding: 0.5rem 0.65rem;
             border-radius: 8px;
             font-weight: 500;
             color: #000;
             background: transparent;
-            font-size: 0.78rem;
+            font-size: 0.875rem;
             min-width: 0;
             border: none;
             text-decoration: none;
@@ -719,14 +724,14 @@ header('Content-Type: text/html; charset=utf-8');
             flex: 1;
             min-height: 0;
             display: grid;
-            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr);
-            gap: 0.45rem;
+            grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.18fr);
+            gap: 0.55rem;
             overflow: hidden;
         }
         @media (max-width: 767.98px) {
             .installer-workspace {
                 grid-template-columns: 1fr;
-                grid-template-rows: minmax(64px, 16dvh) minmax(0, 1fr);
+                grid-template-rows: minmax(88px, 22dvh) minmax(0, 1fr);
             }
         }
         .installer-console-card,
@@ -740,10 +745,10 @@ header('Content-Type: text/html; charset=utf-8');
             flex-direction: column;
         }
         .installer-console-head {
-            font-size: 0.72rem;
+            font-size: 0.8125rem;
             font-weight: 600;
             color: #495057;
-            padding: 0.35rem 0.5rem 0.2rem;
+            padding: 0.45rem 0.65rem 0.35rem;
             border-bottom: 1px solid #e9ecef;
             flex: 0 0 auto;
         }
@@ -751,28 +756,29 @@ header('Content-Type: text/html; charset=utf-8');
             flex: 1;
             min-height: 0;
             background: #1e1e1e;
-            color: #c8c8c8;
-            font-family: ui-monospace, Consolas, monospace;
-            font-size: 0.62rem;
-            line-height: 1.25;
-            padding: 0.35rem 0.45rem;
+            color: #d4d4d4;
+            font-family: ui-monospace, Consolas, 'Courier New', monospace;
+            font-size: 0.8125rem;
+            line-height: 1.4;
+            padding: 0.5rem 0.6rem;
             overflow: hidden;
             white-space: pre-wrap;
             word-break: break-word;
         }
         .console-panel:empty::before {
             content: 'Вывод команд…';
-            color: #6e6e6e;
+            color: #8a8a8a;
         }
         .installer-main-inner {
             flex: 1;
             min-height: 0;
-            padding: 0.45rem 0.55rem;
+            padding: 0.55rem 0.75rem;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             overflow-x: hidden;
-            gap: 0.35rem;
+            gap: 0.45rem;
+            font-size: 0.9375rem;
         }
         .notification-panel {
             border-radius: 0;
@@ -787,11 +793,11 @@ header('Content-Type: text/html; charset=utf-8');
             flex-direction: column;
         }
         .section-title {
-            font-size: 0.88rem;
+            font-size: 1.0625rem;
             font-weight: 600;
             color: #333;
-            margin: 0 0 0.3rem;
-            padding-bottom: 0.2rem;
+            margin: 0 0 0.4rem;
+            padding-bottom: 0.25rem;
             border-bottom: 2px solid #0d6efd;
             display: inline-block;
             flex: 0 0 auto;
@@ -808,70 +814,107 @@ header('Content-Type: text/html; charset=utf-8');
             min-height: 0;
             overflow: hidden;
         }
+        .installer-hint {
+            font-size: 0.875rem;
+            line-height: 1.45;
+            color: #5c636a;
+            margin-bottom: 0.35rem;
+        }
+        .installer-hint code { font-size: 0.92em; }
+        .installer-status-text { font-size: 0.9375rem; margin-bottom: 0.35rem; }
+        .installer-footnote {
+            font-size: 0.8125rem;
+            line-height: 1.4;
+            color: #6c757d;
+            margin: 0.35rem 0 0;
+        }
+        .installer-footnote code { font-size: 0.9em; }
+        .installer-progress-meta {
+            font-size: 0.8125rem;
+            color: #6c757d;
+        }
         .btn-gradient {
             background: linear-gradient(135deg, #0d6efd, #0b5ed7);
             border: none;
             color: white !important;
-            padding: 0.35rem 0.85rem;
-            font-size: 0.8rem;
+            padding: 0.45rem 1.1rem;
+            font-size: 0.9375rem;
+        }
+        .btn-gradient.btn-sm {
+            padding: 0.4rem 0.9rem;
+            font-size: 0.875rem;
         }
         .btn-gradient:hover {
             filter: brightness(1.05);
             color: white !important;
         }
         .btn-gradient:disabled { opacity: 0.55; }
-        .progress { height: 6px; border-radius: 6px; margin: 0; }
+        .progress { height: 8px; border-radius: 6px; margin: 0; }
         .progress-bar { transition: width 0.35s ease; }
         #global-progress-wrap {
             flex: 0 0 auto;
             margin: 0 !important;
         }
         table.install-checks {
-            font-size: 0.68rem;
+            font-size: 0.875rem;
             margin-bottom: 0;
             width: 100%;
             table-layout: fixed;
         }
         table.install-checks td {
             vertical-align: top;
-            padding: 0.2rem 0.35rem 0.2rem 0;
+            padding: 0.35rem 0.5rem 0.35rem 0;
             border-color: #eee;
         }
         table.install-checks td:first-child {
-            width: 42%;
+            width: 40%;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         table.install-checks .cell-detail {
-            font-size: 0.62rem;
-            line-height: 1.2;
-            max-height: 2.4em;
+            font-size: 0.8125rem;
+            line-height: 1.35;
+            max-height: 4.05em;
             overflow: hidden;
             display: -webkit-box;
             -webkit-box-orient: vertical;
-            -webkit-line-clamp: 2;
+            -webkit-line-clamp: 3;
+            color: #6c757d;
         }
-        table.install-checks .badge { font-size: 0.6rem; font-weight: 600; }
+        table.install-checks .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            vertical-align: middle;
+        }
         .installer-actions {
             flex: 0 0 auto;
-            margin-top: 0.35rem;
-            padding-top: 0.25rem;
+            margin-top: 0.45rem;
+            padding-top: 0.35rem;
         }
-        .form-finalize-compact .form-label { font-size: 0.72rem; margin-bottom: 0.15rem; }
+        .installer-warn {
+            font-size: 0.875rem;
+            margin-top: 0.35rem;
+        }
+        .form-finalize-compact .form-label {
+            font-size: 0.875rem;
+            margin-bottom: 0.2rem;
+            font-weight: 500;
+        }
         .form-finalize-compact .form-control,
         .form-finalize-compact .form-select {
-            padding: 0.25rem 0.45rem;
-            font-size: 0.78rem;
+            padding: 0.4rem 0.65rem;
+            font-size: 0.9375rem;
         }
-        .form-finalize-compact.row { --bs-gutter-y: 0.35rem; --bs-gutter-x: 0.35rem; }
+        .form-finalize-compact.row { --bs-gutter-y: 0.45rem; --bs-gutter-x: 0.5rem; }
         .dir-errors-compact {
-            font-size: 0.72rem;
-            padding: 0.35rem 0.45rem;
+            font-size: 0.875rem;
+            padding: 0.45rem 0.6rem;
             margin: 0;
             border-radius: 8px;
+            line-height: 1.4;
         }
-        .dir-errors-compact ul { margin: 0; padding-left: 1rem; }
+        .dir-errors-compact ul { margin: 0.25rem 0 0; padding-left: 1.15rem; }
     </style>
 </head>
 <body>
@@ -912,7 +955,7 @@ header('Content-Type: text/html; charset=utf-8');
                 <?php endif; ?>
 
                 <div class="d-none" id="global-progress-wrap">
-                    <div class="d-flex justify-content-between text-muted mb-1" style="font-size: 0.68rem;">
+                    <div class="d-flex justify-content-between mb-1 installer-progress-meta">
                         <span id="global-progress-label">Выполняется…</span>
                         <span id="global-progress-pct">0%</span>
                     </div>
@@ -945,7 +988,7 @@ header('Content-Type: text/html; charset=utf-8');
                                 </table>
                             </div>
                             <?php if (! $req['core_ok']): ?>
-                                <p class="text-danger mb-0" style="font-size: 0.68rem; margin-top: 0.25rem;">Исправьте окружение и обновите страницу.</p>
+                                <p class="text-danger mb-0 installer-warn">Исправьте окружение и обновите страницу.</p>
                             <?php endif; ?>
                             <div class="installer-actions">
                                 <?php if ($req['core_ok'] && $dirErrors === []): ?>
@@ -965,29 +1008,29 @@ header('Content-Type: text/html; charset=utf-8');
                 <?php if ($step === 2): ?>
                     <div class="notification-panel">
                         <?php if ($maxStep < 2 || ! $req['core_ok'] || $dirErrors !== []): ?>
-                            <p class="text-danger small mb-2">Шаг 2 недоступен.</p>
-                            <a class="btn btn-secondary btn-sm" href="?step=1"><i class="bi bi-arrow-left"></i> Шаг 1</a>
+                            <p class="text-danger mb-2">Шаг 2 недоступен.</p>
+                            <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left me-1"></i>Шаг 1</a>
                         <?php else: ?>
                             <div class="section-title">Composer</div>
                             <div class="step-body">
-                                <p class="text-muted mb-1" style="font-size: 0.68rem; line-height: 1.3;">Авто: <code>composer.phar</code> и <code>composer install</code> при необходимости (SHA-384).</p>
-                                <p class="mb-1" style="font-size: 0.72rem;" id="step2-status">
+                                <p class="installer-hint mb-1">Автоматически: <code>composer.phar</code> и <code>composer install</code> при необходимости (проверка SHA-384).</p>
+                                <p class="installer-status-text mb-1" id="step2-status">
                                     <?php if ($req['vendor_ok'] && $maxStep >= 3): ?>
                                         <span class="text-success"><i class="bi bi-check-circle me-1"></i>Готово — шаг 3.</span>
                                     <?php else: ?>
                                         <span class="text-primary"><i class="bi bi-hourglass-split me-1"></i>Запуск…</span>
                                     <?php endif; ?>
                                 </p>
-                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-retry-stack" <?= ($req['vendor_ok'] && $maxStep >= 3) ? 'disabled' : '' ?>>
-                                    <i class="bi bi-arrow-repeat"></i> Повторить
+                                <button type="button" class="btn btn-outline-secondary" id="btn-retry-stack" <?= ($req['vendor_ok'] && $maxStep >= 3) ? 'disabled' : '' ?>>
+                                    <i class="bi bi-arrow-repeat me-1"></i>Повторить
                                 </button>
-                                <p class="text-muted mb-0 mt-1" style="font-size: 0.62rem;">Хэш: <code>COMPOSER_INSTALLER_SHA384</code> в <code>install.php</code>.</p>
-                                <div class="installer-actions d-flex flex-wrap gap-1">
-                                    <a class="btn btn-secondary btn-sm" href="?step=1"><i class="bi bi-arrow-left"></i></a>
+                                <p class="installer-footnote">Хэш установщика: константа <code>COMPOSER_INSTALLER_SHA384</code> в <code>install.php</code>.</p>
+                                <div class="installer-actions d-flex flex-wrap gap-2">
+                                    <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left me-1"></i>Назад</a>
                                     <?php if ($maxStep >= 3): ?>
-                                        <a class="btn btn-gradient btn-sm" href="?step=3">Далее <i class="bi bi-arrow-right ms-1"></i></a>
+                                        <a class="btn btn-gradient" href="?step=3">Далее: настройка <i class="bi bi-arrow-right ms-1"></i></a>
                                     <?php else: ?>
-                                        <button type="button" class="btn btn-gradient btn-sm" disabled id="link-step3-pending"><i class="bi bi-lock"></i></button>
+                                        <button type="button" class="btn btn-gradient" disabled id="link-step3-pending"><i class="bi bi-lock me-1"></i>Шаг 3</button>
                                     <?php endif; ?>
                                 </div>
                             </div>
@@ -998,8 +1041,8 @@ header('Content-Type: text/html; charset=utf-8');
                 <?php if ($step === 3): ?>
                     <div class="notification-panel">
                         <?php if ($maxStep < 3 || ! $req['core_ok'] || $dirErrors !== [] || ! $req['vendor_ok']): ?>
-                            <p class="text-danger small mb-2">Шаг 3 недоступен.</p>
-                            <a class="btn btn-secondary btn-sm" href="?step=2">Шаг 2</a>
+                            <p class="text-danger mb-2">Шаг 3 недоступен.</p>
+                            <a class="btn btn-secondary" href="?step=2"><i class="bi bi-arrow-left me-1"></i>Шаг 2</a>
                         <?php else: ?>
                             <div class="section-title">Параметры</div>
                             <div class="step-body">
@@ -1046,12 +1089,12 @@ header('Content-Type: text/html; charset=utf-8');
                                         </div>
                                     </div>
                                     <div class="col-12">
-                                        <p class="text-muted mb-0" style="font-size: 0.62rem;"><code>key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code></p>
+                                        <p class="installer-footnote mb-0">Будут выполнены: <code>key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
                                     </div>
-                                    <div class="col-12 installer-actions d-flex flex-wrap gap-1">
-                                        <a class="btn btn-secondary btn-sm" href="?step=2"><i class="bi bi-arrow-left"></i></a>
-                                        <button type="submit" class="btn btn-gradient btn-sm" id="btn-finalize">
-                                            <i class="bi bi-lightning-charge me-1"></i> Завершить
+                                    <div class="col-12 installer-actions d-flex flex-wrap gap-2">
+                                        <a class="btn btn-secondary" href="?step=2"><i class="bi bi-arrow-left me-1"></i>Назад</a>
+                                        <button type="submit" class="btn btn-gradient" id="btn-finalize">
+                                            <i class="bi bi-lightning-charge me-1"></i>Завершить установку
                                         </button>
                                     </div>
                                 </form>
