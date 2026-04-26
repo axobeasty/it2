@@ -635,7 +635,7 @@ header('Content-Type: text/html; charset=utf-8');
     <link href="<?= installer_h($bootstrapCss) ?>" rel="stylesheet" crossorigin="anonymous">
     <link href="<?= installer_h($iconsCss) ?>" rel="stylesheet">
     <style>
-        /* Полноэкранно без прокрутки страницы; основной текст ~15px для комфортного чтения */
+        /* Весь интерфейс в пределах экрана без прокрутки; крупный читабельный текст и широкая колонка */
         html, body {
             height: 100%;
             max-height: 100dvh;
@@ -647,17 +647,17 @@ header('Content-Type: text/html; charset=utf-8');
         body {
             background: #f5f7fb;
             font-family: 'Segoe UI', system-ui, sans-serif;
-            font-size: 0.9375rem;
-            line-height: 1.45;
+            font-size: 1.0625rem;
+            line-height: 1.5;
             display: flex;
             flex-direction: column;
         }
         .installer-shell {
             flex: 1;
             width: 100%;
-            max-width: 64rem;
+            max-width: min(92rem, calc(100vw - 1.25rem));
             margin: 0 auto;
-            padding: 0.5rem 0.85rem 0.6rem;
+            padding: 0.45rem 0.75rem 0.55rem;
             display: flex;
             flex-direction: column;
             min-height: 0;
@@ -669,42 +669,42 @@ header('Content-Type: text/html; charset=utf-8');
             align-items: baseline;
             justify-content: space-between;
             gap: 0.5rem;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.1rem;
         }
         .header-title {
             font-weight: 600;
             color: #000;
-            font-size: 1.35rem;
+            font-size: 1.625rem;
             margin: 0;
-            line-height: 1.25;
+            line-height: 1.2;
         }
         .installer-lead {
-            font-size: 0.875rem;
-            color: #5c636a;
-            margin: 0.2rem 0 0.45rem;
-            line-height: 1.4;
-            max-height: 2.8em;
+            font-size: 1rem;
+            color: #495057;
+            margin: 0.15rem 0 0.35rem;
+            line-height: 1.45;
+            max-height: 2.9em;
             overflow: hidden;
         }
-        .installer-lead code { font-size: 0.9em; }
+        .installer-lead code { font-size: 0.95em; }
         .profile-tabs {
             display: flex;
-            gap: 8px;
+            gap: 10px;
             background: white;
-            border-radius: 10px;
-            padding: 5px;
-            margin-bottom: 0.45rem;
+            border-radius: 12px;
+            padding: 6px;
+            margin-bottom: 0.4rem;
             flex: 0 0 auto;
         }
         .profile-tab {
             flex: 1;
             text-align: center;
-            padding: 0.5rem 0.65rem;
-            border-radius: 8px;
+            padding: 0.55rem 0.85rem;
+            border-radius: 10px;
             font-weight: 500;
             color: #000;
             background: transparent;
-            font-size: 0.875rem;
+            font-size: 1rem;
             min-width: 0;
             border: none;
             text-decoration: none;
@@ -724,31 +724,37 @@ header('Content-Type: text/html; charset=utf-8');
             flex: 1;
             min-height: 0;
             display: grid;
-            grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.18fr);
-            gap: 0.55rem;
+            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.4fr);
+            gap: 0.65rem;
             overflow: hidden;
         }
         @media (max-width: 767.98px) {
             .installer-workspace {
                 grid-template-columns: 1fr;
-                grid-template-rows: minmax(88px, 22dvh) minmax(0, 1fr);
+                grid-template-rows: minmax(92px, 20dvh) minmax(0, 1fr);
             }
+            .installer-shell {
+                max-width: 100%;
+                padding-left: 0.6rem;
+                padding-right: 0.6rem;
+            }
+            .header-title { font-size: 1.35rem; }
         }
         .installer-console-card,
         .installer-main-card {
             background: #fff;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border-radius: 12px;
+            box-shadow: 0 2px 14px rgba(0, 0, 0, 0.07);
             min-height: 0;
             overflow: hidden;
             display: flex;
             flex-direction: column;
         }
         .installer-console-head {
-            font-size: 0.8125rem;
+            font-size: 0.9375rem;
             font-weight: 600;
             color: #495057;
-            padding: 0.45rem 0.65rem 0.35rem;
+            padding: 0.5rem 0.85rem 0.4rem;
             border-bottom: 1px solid #e9ecef;
             flex: 0 0 auto;
         }
@@ -756,29 +762,29 @@ header('Content-Type: text/html; charset=utf-8');
             flex: 1;
             min-height: 0;
             background: #1e1e1e;
-            color: #d4d4d4;
+            color: #e2e2e2;
             font-family: ui-monospace, Consolas, 'Courier New', monospace;
-            font-size: 0.8125rem;
-            line-height: 1.4;
-            padding: 0.5rem 0.6rem;
+            font-size: 0.9375rem;
+            line-height: 1.45;
+            padding: 0.55rem 0.75rem;
             overflow: hidden;
             white-space: pre-wrap;
             word-break: break-word;
         }
         .console-panel:empty::before {
             content: 'Вывод команд…';
-            color: #8a8a8a;
+            color: #9a9a9a;
         }
         .installer-main-inner {
             flex: 1;
             min-height: 0;
-            padding: 0.55rem 0.75rem;
+            padding: 0.6rem 1rem;
             display: flex;
             flex-direction: column;
             overflow: hidden;
             overflow-x: hidden;
-            gap: 0.45rem;
-            font-size: 0.9375rem;
+            gap: 0.4rem;
+            font-size: 1.0625rem;
         }
         .notification-panel {
             border-radius: 0;
@@ -793,11 +799,11 @@ header('Content-Type: text/html; charset=utf-8');
             flex-direction: column;
         }
         .section-title {
-            font-size: 1.0625rem;
+            font-size: 1.25rem;
             font-weight: 600;
             color: #333;
-            margin: 0 0 0.4rem;
-            padding-bottom: 0.25rem;
+            margin: 0 0 0.35rem;
+            padding-bottom: 0.2rem;
             border-bottom: 2px solid #0d6efd;
             display: inline-block;
             flex: 0 0 auto;
@@ -815,106 +821,115 @@ header('Content-Type: text/html; charset=utf-8');
             overflow: hidden;
         }
         .installer-hint {
-            font-size: 0.875rem;
-            line-height: 1.45;
-            color: #5c636a;
-            margin-bottom: 0.35rem;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #495057;
+            margin-bottom: 0.3rem;
         }
-        .installer-hint code { font-size: 0.92em; }
-        .installer-status-text { font-size: 0.9375rem; margin-bottom: 0.35rem; }
+        .installer-hint code { font-size: 0.95em; }
+        .installer-status-text { font-size: 1.0625rem; margin-bottom: 0.3rem; }
         .installer-footnote {
-            font-size: 0.8125rem;
-            line-height: 1.4;
+            font-size: 0.9375rem;
+            line-height: 1.45;
             color: #6c757d;
-            margin: 0.35rem 0 0;
+            margin: 0.3rem 0 0;
         }
-        .installer-footnote code { font-size: 0.9em; }
+        .installer-footnote code { font-size: 0.95em; }
         .installer-progress-meta {
-            font-size: 0.8125rem;
+            font-size: 0.9375rem;
             color: #6c757d;
         }
         .btn-gradient {
             background: linear-gradient(135deg, #0d6efd, #0b5ed7);
             border: none;
             color: white !important;
-            padding: 0.45rem 1.1rem;
-            font-size: 0.9375rem;
+            padding: 0.55rem 1.35rem;
+            font-size: 1.0625rem;
         }
         .btn-gradient.btn-sm {
-            padding: 0.4rem 0.9rem;
-            font-size: 0.875rem;
+            padding: 0.45rem 1rem;
+            font-size: 1rem;
         }
         .btn-gradient:hover {
             filter: brightness(1.05);
             color: white !important;
         }
         .btn-gradient:disabled { opacity: 0.55; }
-        .progress { height: 8px; border-radius: 6px; margin: 0; }
+        .installer-main-inner .btn-secondary {
+            font-size: 1.0625rem;
+            padding: 0.5rem 1rem;
+        }
+        .installer-main-inner .btn-outline-secondary {
+            font-size: 1rem;
+            padding: 0.45rem 1rem;
+        }
+        .progress { height: 10px; border-radius: 8px; margin: 0; }
         .progress-bar { transition: width 0.35s ease; }
         #global-progress-wrap {
             flex: 0 0 auto;
             margin: 0 !important;
         }
         table.install-checks {
-            font-size: 0.875rem;
+            font-size: 1rem;
             margin-bottom: 0;
             width: 100%;
             table-layout: fixed;
         }
         table.install-checks td {
             vertical-align: top;
-            padding: 0.35rem 0.5rem 0.35rem 0;
+            padding: 0.3rem 0.55rem 0.3rem 0;
             border-color: #eee;
         }
         table.install-checks td:first-child {
-            width: 40%;
+            width: 38%;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
         table.install-checks .cell-detail {
-            font-size: 0.8125rem;
-            line-height: 1.35;
-            max-height: 4.05em;
+            font-size: 0.9375rem;
+            line-height: 1.4;
+            max-height: 2.8em;
             overflow: hidden;
             display: -webkit-box;
             -webkit-box-orient: vertical;
-            -webkit-line-clamp: 3;
-            color: #6c757d;
+            -webkit-line-clamp: 2;
+            color: #5c636a;
         }
         table.install-checks .badge {
-            font-size: 0.75rem;
+            font-size: 0.8125rem;
             font-weight: 600;
             vertical-align: middle;
+            padding: 0.35em 0.55em;
         }
         .installer-actions {
             flex: 0 0 auto;
-            margin-top: 0.45rem;
-            padding-top: 0.35rem;
+            margin-top: 0.35rem;
+            padding-top: 0.3rem;
         }
         .installer-warn {
-            font-size: 0.875rem;
-            margin-top: 0.35rem;
+            font-size: 1rem;
+            margin-top: 0.3rem;
         }
         .form-finalize-compact .form-label {
-            font-size: 0.875rem;
+            font-size: 1rem;
             margin-bottom: 0.2rem;
             font-weight: 500;
         }
         .form-finalize-compact .form-control,
         .form-finalize-compact .form-select {
-            padding: 0.4rem 0.65rem;
-            font-size: 0.9375rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 1.0625rem;
         }
-        .form-finalize-compact.row { --bs-gutter-y: 0.45rem; --bs-gutter-x: 0.5rem; }
+        .form-finalize-compact.row { --bs-gutter-y: 0.4rem; --bs-gutter-x: 0.65rem; }
         .dir-errors-compact {
-            font-size: 0.875rem;
-            padding: 0.45rem 0.6rem;
+            font-size: 1rem;
+            padding: 0.5rem 0.75rem;
             margin: 0;
-            border-radius: 8px;
-            line-height: 1.4;
+            border-radius: 10px;
+            line-height: 1.45;
         }
-        .dir-errors-compact ul { margin: 0.25rem 0 0; padding-left: 1.15rem; }
+        .dir-errors-compact ul { margin: 0.2rem 0 0; padding-left: 1.2rem; }
     </style>
 </head>
 <body>
