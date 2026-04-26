@@ -14,8 +14,7 @@ const INSTALLER_ROOT = __DIR__ . '/..';
 const INSTALLER_LOCK = INSTALLER_ROOT . '/storage/framework/installer.lock';
 const INSTALLER_ENV_EXAMPLE = INSTALLER_ROOT . '/.env.example';
 const INSTALLER_ENV = INSTALLER_ROOT . '/.env';
-
-header('Content-Type: text/html; charset=utf-8');
+const COMPOSER_INSTALLER_SHA384 = 'c8b085408188070d5f52bcfe4ecfbee5f727afa458b2573b8eaaf77b3419b0bf2768dc67c86944da1544f06fa544fd47';
 
 // -------------------------------------------------------------------------
 // Helpers
@@ -36,6 +35,16 @@ function installer_env_quote(string $value): string
     }
 
     return '"'.str_replace(['\\', '"', "\n", "\r"], ['\\\\', '\"', '', ''], $value).'"';
+}
+
+function installer_php_binary(): string
+{
+    $php = PHP_BINARY;
+    if ($php !== '' && @is_executable($php)) {
+        return $php;
+    }
+
+    return 'php';
 }
 
 function installer_ensure_directories(): array
@@ -64,22 +73,61 @@ function installer_ensure_directories(): array
     return $errors;
 }
 
+function installer_proc(string $command, string $cwd): array
+{
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $process = @proc_open($command, $descriptors, $pipes, $cwd);
+    if (! is_resource($process)) {
+        return ['code' => -1, 'output' => 'Не удалось запустить процесс. Проверьте proc_open и права.'];
+    }
+
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    fclose($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[2]);
+    $code = proc_close($process);
+
+    $out = trim(($stdout ?? '')."\n".($stderr ?? ''));
+
+    return ['code' => $code, 'output' => $out];
+}
+
 function installer_requirements(): array
 {
     $checks = [];
-    $ok = true;
+    $coreOk = true;
 
     $minPhp = '8.2.0';
     $phpOk = version_compare(PHP_VERSION, $minPhp, '>=');
     $checks[] = ['label' => 'PHP >= '.$minPhp, 'ok' => $phpOk, 'detail' => 'Текущая версия: '.PHP_VERSION];
-    $ok = $ok && $phpOk;
+    $coreOk = $coreOk && $phpOk;
 
     $exts = ['openssl', 'pdo', 'mbstring', 'tokenizer', 'xml', 'ctype', 'json', 'fileinfo'];
     foreach ($exts as $ext) {
         $loaded = extension_loaded($ext);
         $checks[] = ['label' => 'Расширение '.$ext, 'ok' => $loaded, 'detail' => $loaded ? 'подключено' : 'не найдено'];
-        $ok = $ok && $loaded;
+        $coreOk = $coreOk && $loaded;
     }
+
+    $zip = extension_loaded('zip');
+    $checks[] = [
+        'label' => 'Расширение zip (для Composer)',
+        'ok' => $zip,
+        'detail' => $zip ? 'подключено' : 'без ext-zip composer install может завершиться ошибкой',
+    ];
+
+    $urlFopen = filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN);
+    $checks[] = [
+        'label' => 'allow_url_fopen (скачивание Composer)',
+        'ok' => $urlFopen,
+        'detail' => $urlFopen ? 'да' : 'для кнопки «Скачать composer.phar» включите в php.ini или загрузите composer.phar вручную в корень проекта',
+    ];
 
     $intl = extension_loaded('intl');
     $checks[] = [
@@ -94,18 +142,25 @@ function installer_requirements(): array
     $checks[] = ['label' => 'Расширение pdo_mysql (для MySQL)', 'ok' => true, 'detail' => $pdoMysql ? 'есть' : 'нужно, если выберете MySQL'];
 
     $vendor = is_file(INSTALLER_ROOT.'/vendor/autoload.php');
-    $checks[] = ['label' => 'Зависимости Composer (vendor/)', 'ok' => $vendor, 'detail' => $vendor ? 'найдено' : 'выполните: composer install'];
-    $ok = $ok && $vendor;
+    $checks[] = [
+        'label' => 'Зависимости Composer (vendor/)',
+        'ok' => $vendor,
+        'detail' => $vendor ? 'найдено' : 'установите на шаге «Composer»',
+    ];
 
     $envExample = is_readable(INSTALLER_ENV_EXAMPLE);
     $checks[] = ['label' => 'Файл .env.example', 'ok' => $envExample, 'detail' => $envExample ? 'читается' : 'отсутствует'];
-    $ok = $ok && $envExample;
+    $coreOk = $coreOk && $envExample;
 
     $procOpen = function_exists('proc_open');
-    $checks[] = ['label' => 'Функция proc_open', 'ok' => $procOpen, 'detail' => $procOpen ? 'доступна' : 'нужна для artisan; включите в php.ini'];
-    $ok = $ok && $procOpen;
+    $checks[] = ['label' => 'Функция proc_open', 'ok' => $procOpen, 'detail' => $procOpen ? 'доступна' : 'нужна для команд; включите в php.ini'];
+    $coreOk = $coreOk && $procOpen;
 
-    return ['checks' => $checks, 'ok' => $ok];
+    return [
+        'checks' => $checks,
+        'core_ok' => $coreOk,
+        'vendor_ok' => $vendor,
+    ];
 }
 
 function installer_build_env(array $in): string
@@ -156,121 +211,132 @@ function installer_build_env(array $in): string
 function installer_run_artisan(string $arguments): array
 {
     $root = INSTALLER_ROOT;
-    $php = PHP_BINARY;
-    if ($php === '' || ! is_executable($php)) {
-        $php = 'php';
-    }
-
+    $php = installer_php_binary();
     $artisan = $root.DIRECTORY_SEPARATOR.'artisan';
     $cmd = escapeshellarg($php).' '.escapeshellarg($artisan).' '.$arguments;
 
-    $descriptors = [
-        1 => ['pipe', 'w'],
-        2 => ['pipe', 'w'],
+    return installer_proc($cmd, $root);
+}
+
+function installer_api_verify_token(): bool
+{
+    $t = (string) ($_POST['installer_token'] ?? '');
+
+    return isset($_SESSION['installer_token']) && hash_equals($_SESSION['installer_token'], $t);
+}
+
+function installer_api_composer_phar(): array
+{
+    $php = installer_php_binary();
+    $root = INSTALLER_ROOT;
+    $steps = [];
+    $log = [];
+
+    $setupPath = $root.DIRECTORY_SEPARATOR.'composer-setup.php';
+
+    $r1 = installer_proc(
+        escapeshellarg($php).' -r '.escapeshellarg("copy('https://getcomposer.org/installer', 'composer-setup.php');"),
+        $root
+    );
+    $steps[] = ['label' => 'Загрузка composer-setup.php', 'code' => $r1['code'], 'output' => $r1['output']];
+    $log[] = '$ php -r "copy(\'https://getcomposer.org/installer\', \'composer-setup.php\');"'."\n".$r1['output'];
+    if ($r1['code'] !== 0) {
+        return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
+    }
+
+    $verifyCode = "if (hash_file('sha384', 'composer-setup.php') === '".COMPOSER_INSTALLER_SHA384."') { echo 'Installer verified'.PHP_EOL; } else { echo 'Installer corrupt'.PHP_EOL; unlink('composer-setup.php'); exit(1); }";
+    $r2 = installer_proc(escapeshellarg($php).' -r '.escapeshellarg($verifyCode), $root);
+    $steps[] = ['label' => 'Проверка SHA-384 установщика', 'code' => $r2['code'], 'output' => $r2['output']];
+    $log[] = '$ php -r "hash_file(...composer-setup.php) === <ожидаемый хэш> ..."'."\n".$r2['output'];
+    if ($r2['code'] !== 0) {
+        if (is_file($setupPath)) {
+            @unlink($setupPath);
+        }
+
+        return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
+    }
+
+    $r3 = installer_proc(escapeshellarg($php).' '.escapeshellarg('composer-setup.php'), $root);
+    $steps[] = ['label' => 'Запуск composer-setup.php', 'code' => $r3['code'], 'output' => $r3['output']];
+    $log[] = '$ php composer-setup.php'."\n".$r3['output'];
+    if ($r3['code'] !== 0) {
+        if (is_file($setupPath)) {
+            @unlink($setupPath);
+        }
+
+        return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
+    }
+
+    $r4 = installer_proc(escapeshellarg($php).' -r '.escapeshellarg("unlink('composer-setup.php');"), $root);
+    $steps[] = ['label' => 'Удаление composer-setup.php', 'code' => $r4['code'], 'output' => $r4['output']];
+    $log[] = '$ php -r "unlink(\'composer-setup.php\');"'."\n".$r4['output'];
+
+    $phar = $root.DIRECTORY_SEPARATOR.'composer.phar';
+    $ok = is_file($phar);
+
+    return [
+        'ok' => $ok && $r4['code'] === 0,
+        'steps' => $steps,
+        'log' => implode("\n\n", $log),
+        'composer_phar' => $ok,
     ];
-
-    $process = @proc_open($cmd, $descriptors, $pipes, $root);
-    if (! is_resource($process)) {
-        return ['code' => -1, 'output' => 'Не удалось запустить процесс artisan.'];
-    }
-
-    $stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-    $code = proc_close($process);
-
-    $out = trim($stdout."\n".$stderr);
-
-    return ['code' => $code, 'output' => $out];
 }
 
-// -------------------------------------------------------------------------
-// Routing
-// -------------------------------------------------------------------------
-
-if (is_file(INSTALLER_LOCK)) {
-    http_response_code(200);
-    echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Уже установлено</title>';
-    echo '<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5} a{color:#0d6efd}</style></head><body>';
-    echo '<h1>Установка уже выполнена</h1>';
-    echo '<p>Файл-маркер <code>storage/framework/installer.lock</code> найден. Откройте <a href="/">главную страницу</a>.</p>';
-    echo '<p>Чтобы снова запустить мастер (осторожно: можно перезаписать .env), удалите <code>installer.lock</code> и при необходимости этот файл <code>public/install.php</code> после работы.</p>';
-    echo '</body></html>';
-    exit;
-}
-
-$step = isset($_GET['step']) ? (int) $_GET['step'] : 1;
-if ($step < 1 || $step > 2) {
-    $step = 1;
-}
-
-$dirErrors = installer_ensure_directories();
-$req = installer_requirements();
-
-// POST install
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['installer_action']) && $_POST['installer_action'] === 'install') {
-    if (empty($_SESSION['installer_token']) || ! hash_equals($_SESSION['installer_token'], (string) ($_POST['installer_token'] ?? ''))) {
-        http_response_code(403);
-        echo 'Неверный токен сессии. Обновите страницу и попробуйте снова.';
-        exit;
+function installer_api_composer_install(): array
+{
+    $root = INSTALLER_ROOT;
+    $phar = $root.DIRECTORY_SEPARATOR.'composer.phar';
+    if (! is_file($phar)) {
+        return ['ok' => false, 'log' => 'Файл composer.phar не найден. Сначала скачайте Composer.', 'steps' => []];
     }
 
-    if ($dirErrors !== [] || ! $req['ok']) {
-        http_response_code(400);
-        echo 'Требования не выполнены. Вернитесь на шаг 1.';
-        exit;
-    }
+    $php = installer_php_binary();
+    $cmd = escapeshellarg($php).' '.escapeshellarg('composer.phar').' install --no-interaction --prefer-dist';
+    $r = installer_proc($cmd, $root);
+    $log = '$ php composer.phar install --no-interaction --prefer-dist'."\n".$r['output'];
+    $vendorOk = is_file($root.'/vendor/autoload.php');
 
-    $dbConn = $_POST['db_connection'] === 'mysql' ? 'mysql' : 'sqlite';
-    $data = [
-        'app_name' => trim((string) ($_POST['app_name'] ?? '')),
-        'app_url' => trim((string) ($_POST['app_url'] ?? '')),
-        'db_connection' => $dbConn,
-        'db_host' => trim((string) ($_POST['db_host'] ?? '')),
-        'db_port' => trim((string) ($_POST['db_port'] ?? '3306')),
-        'db_database' => trim((string) ($_POST['db_database'] ?? '')),
-        'db_username' => trim((string) ($_POST['db_username'] ?? '')),
-        'db_password' => (string) ($_POST['db_password'] ?? ''),
+    return [
+        'ok' => $r['code'] === 0 && $vendorOk,
+        'steps' => [['label' => 'composer install', 'code' => $r['code'], 'output' => $r['output']]],
+        'log' => $log,
+        'vendor_ok' => $vendorOk,
     ];
+}
 
-    if ($data['app_name'] === '' || $data['app_url'] === '') {
-        http_response_code(400);
-        echo 'Укажите название приложения и URL.';
-        exit;
+function installer_api_finalize(array $data): array
+{
+    $dbConn = ($data['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite';
+
+    if (($data['app_name'] ?? '') === '' || ($data['app_url'] ?? '') === '') {
+        return ['ok' => false, 'log' => 'Укажите название приложения и URL.', 'steps' => []];
+    }
+
+    if (! is_file(INSTALLER_ROOT.'/vendor/autoload.php')) {
+        return ['ok' => false, 'log' => 'Нет vendor/. Сначала выполните «Установить зависимости».', 'steps' => []];
     }
 
     if ($dbConn === 'mysql') {
-        if ($data['db_database'] === '' || $data['db_username'] === '') {
-            http_response_code(400);
-            echo 'Для MySQL укажите имя БД и пользователя.';
-            exit;
+        if (($data['db_database'] ?? '') === '' || ($data['db_username'] ?? '') === '') {
+            return ['ok' => false, 'log' => 'Для MySQL укажите имя БД и пользователя.', 'steps' => []];
         }
         if (! extension_loaded('pdo_mysql')) {
-            http_response_code(400);
-            echo 'Расширение pdo_mysql не установлено.';
-            exit;
+            return ['ok' => false, 'log' => 'Расширение pdo_mysql не установлено.', 'steps' => []];
         }
     } else {
         if (! extension_loaded('pdo_sqlite')) {
-            http_response_code(400);
-            echo 'Расширение pdo_sqlite не установлено.';
-            exit;
+            return ['ok' => false, 'log' => 'Расширение pdo_sqlite не установлено.', 'steps' => []];
         }
     }
 
     try {
-        $envContent = installer_build_env($data);
+        $envContent = installer_build_env(array_merge($data, ['db_connection' => $dbConn]));
     } catch (Throwable $e) {
-        http_response_code(500);
-        echo installer_h($e->getMessage());
-        exit;
+        return ['ok' => false, 'log' => $e->getMessage(), 'steps' => []];
     }
 
     if (@file_put_contents(INSTALLER_ENV, $envContent) === false) {
-        http_response_code(500);
-        echo 'Не удалось записать файл .env — проверьте права на каталог проекта.';
-        exit;
+        return ['ok' => false, 'log' => 'Не удалось записать .env', 'steps' => []];
     }
 
     if ($dbConn === 'sqlite') {
@@ -280,12 +346,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['installer_action']) &
         }
     }
 
-    $log = [];
+    $steps = [];
+    $logParts = [];
     $failed = false;
 
     foreach (['key:generate --force', 'migrate --force', 'db:seed --force'] as $artisanArgs) {
         $r = installer_run_artisan($artisanArgs);
-        $log[] = '$ php artisan '.$artisanArgs."\n".$r['output'];
+        $steps[] = ['label' => 'artisan '.$artisanArgs, 'code' => $r['code'], 'output' => $r['output']];
+        $logParts[] = '$ php artisan '.$artisanArgs."\n".$r['output'];
         if ($r['code'] !== 0) {
             $failed = true;
             break;
@@ -294,43 +362,135 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['installer_action']) &
 
     if (! $failed) {
         $link = installer_run_artisan('storage:link');
-        $log[] = '$ php artisan storage:link'."\n".$link['output'];
+        $steps[] = ['label' => 'artisan storage:link', 'code' => $link['code'], 'output' => $link['output']];
+        $logParts[] = '$ php artisan storage:link'."\n".$link['output'];
+        if ($link['code'] !== 0) {
+            $failed = true;
+        }
     }
 
     if ($failed) {
-        http_response_code(500);
-        echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Ошибка установки</title>';
-        echo '<style>body{font-family:monospace;max-width:52rem;margin:2rem auto;padding:0 1rem;white-space:pre-wrap;background:#1a1a1a;color:#eee}</style></head><body>';
-        echo "<h1 style=\"font-family:system-ui\">Ошибка при выполнении artisan</h1>\n";
-        echo installer_h(implode("\n\n", $log));
-        echo "\n\nИсправьте проблему, удалите частично созданный .env при необходимости и обновите страницу.";
-        echo '</body></html>';
-        exit;
+        return ['ok' => false, 'log' => implode("\n\n", $logParts), 'steps' => $steps];
     }
 
     $lockBody = "installed_at=".gmdate('c')."\n";
     if (@file_put_contents(INSTALLER_LOCK, $lockBody) === false) {
-        http_response_code(500);
-        echo 'Установка прошла, но не удалось записать installer.lock. Создайте вручную файл storage/framework/installer.lock';
+        return [
+            'ok' => false,
+            'log' => implode("\n\n", $logParts)."\n\nНе удалось записать installer.lock",
+            'steps' => $steps,
+        ];
+    }
+
+    return ['ok' => true, 'log' => implode("\n\n", $logParts), 'steps' => $steps];
+}
+
+// -------------------------------------------------------------------------
+// Routing: уже установлено
+// -------------------------------------------------------------------------
+
+if (is_file(INSTALLER_LOCK)) {
+    header('Content-Type: text/html; charset=utf-8');
+    $bootstrapCss = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css';
+    $iconsCss = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css';
+    echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
+    echo '<title>Уже установлено</title>';
+    echo '<link href="'.installer_h($bootstrapCss).'" rel="stylesheet"><link href="'.installer_h($iconsCss).'" rel="stylesheet">';
+    echo '<style>body{background:#f5f7fb;font-family:\'Segoe UI\',sans-serif;min-height:100vh}.panel{max-width:40rem;margin:2rem auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.06);padding:1.5rem}</style>';
+    echo '</head><body class="p-3"><div class="panel">';
+    echo '<h1 class="h4 mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Установка уже выполнена</h1>';
+    echo '<p>Файл <code>storage/framework/installer.lock</code> найден. Откройте <a href="/">главную страницу</a>.</p>';
+    echo '<p class="text-muted small mb-0">Чтобы снова запустить мастер, удалите <code>installer.lock</code> (и при необходимости <code>public/install.php</code> после работы).</p>';
+    echo '</div></body></html>';
+    exit;
+}
+
+// -------------------------------------------------------------------------
+// API (JSON)
+// -------------------------------------------------------------------------
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['api_action'])
+    && isset($_SERVER['HTTP_X_REQUESTED_WITH'])
+    && strcasecmp($_SERVER['HTTP_X_REQUESTED_WITH'], 'XMLHttpRequest') === 0
+) {
+    set_time_limit(900);
+    ini_set('max_execution_time', '900');
+
+    header('Content-Type: application/json; charset=utf-8');
+
+    if (! installer_api_verify_token()) {
+        http_response_code(403);
+        echo json_encode(['ok' => false, 'error' => 'Неверный токен сессии. Обновите страницу.'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $_SESSION['installer_token'] = null;
+    $action = (string) $_POST['api_action'];
 
-    echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><title>Готово</title>';
-    echo '<style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;line-height:1.5} code{background:#f4f4f4;padding:2px 6px;border-radius:4px} .warn{background:#fff3cd;padding:1rem;border-radius:8px;margin:1rem 0} pre{overflow:auto;background:#f8f9fa;padding:1rem;border-radius:8px;font-size:.85rem}</style></head><body>';
-    echo '<h1>Установка завершена</h1>';
-    echo '<p>Сайт готов. Перейдите на <a href="/">главную страницу</a>.</p>';
-    echo '<div class="warn"><strong>Безопасность:</strong> удалите или защитите файл <code>public/install.php</code> на сервере.</div>';
-    echo '<p>Демо-вход после сидера (см. <code>database/seeders/TestUser.php</code>): логин <code>test</code>, пароль <code>123</code>.</p>';
-    echo '<details><summary>Журнал команд</summary><pre>'.installer_h(implode("\n\n", $log)).'</pre></details>';
-    echo '</body></html>';
+    try {
+        if ($action === 'composer_phar') {
+            $payload = installer_api_composer_phar();
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($action === 'composer_install') {
+            $payload = installer_api_composer_install();
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($action === 'finalize') {
+            $data = [
+                'app_name' => trim((string) ($_POST['app_name'] ?? '')),
+                'app_url' => trim((string) ($_POST['app_url'] ?? '')),
+                'db_connection' => $_POST['db_connection'] === 'mysql' ? 'mysql' : 'sqlite',
+                'db_host' => trim((string) ($_POST['db_host'] ?? '')),
+                'db_port' => trim((string) ($_POST['db_port'] ?? '3306')),
+                'db_database' => trim((string) ($_POST['db_database'] ?? '')),
+                'db_username' => trim((string) ($_POST['db_username'] ?? '')),
+                'db_password' => (string) ($_POST['db_password'] ?? ''),
+            ];
+            $payload = installer_api_finalize($data);
+            if ($payload['ok']) {
+                $_SESSION['installer_token'] = bin2hex(random_bytes(16));
+            }
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    } catch (Throwable $e) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'log' => $e->getMessage(), 'steps' => []], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => 'Неизвестное действие'], JSON_UNESCAPED_UNICODE);
     exit;
 }
+
+// -------------------------------------------------------------------------
+// HTML UI
+// -------------------------------------------------------------------------
+
+$dirErrors = installer_ensure_directories();
+$req = installer_requirements();
 
 $_SESSION['installer_token'] = $_SESSION['installer_token'] ?? bin2hex(random_bytes(16));
 $token = $_SESSION['installer_token'];
 
+$step = isset($_GET['step']) ? (int) $_GET['step'] : 1;
+if ($step < 1 || $step > 3) {
+    $step = 1;
+}
+
+$bootstrapCss = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css';
+$bootstrapJs = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js';
+$iconsCss = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css';
+
+$hasComposerPhar = is_file(INSTALLER_ROOT.'/composer.phar');
+$defaultUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http').'://'.($_SERVER['HTTP_HOST'] ?? 'localhost');
+
+header('Content-Type: text/html; charset=utf-8');
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -338,143 +498,383 @@ $token = $_SESSION['installer_token'];
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Установка IT-Master</title>
+    <link href="<?= installer_h($bootstrapCss) ?>" rel="stylesheet" crossorigin="anonymous">
+    <link href="<?= installer_h($iconsCss) ?>" rel="stylesheet">
     <style>
-        :root { --bg: #f5f7fb; --card: #fff; --accent: #0d6efd; --text: #212529; --muted: #6c757d; --danger: #dc3545; --ok: #198754; }
-        * { box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; line-height: 1.5; }
-        .wrap { max-width: 42rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-        h1 { font-size: 1.5rem; margin: 0 0 0.5rem; }
-        .sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .95rem; }
-        .card { background: var(--card); border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: 0 4px 16px rgba(0,0,0,.06); margin-bottom: 1rem; }
-        .steps { display: flex; gap: .5rem; margin-bottom: 1.25rem; font-size: .9rem; }
-        .steps span { padding: .35rem .75rem; border-radius: 8px; background: #e9ecef; color: var(--muted); }
-        .steps span.on { background: #d9e1ef; color: var(--text); font-weight: 600; }
-        table { width: 100%; border-collapse: collapse; font-size: .9rem; }
-        td { padding: .5rem 0; border-bottom: 1px solid #eee; vertical-align: top; }
-        td:first-child { width: 55%; }
-        .badge { display: inline-block; padding: .15rem .5rem; border-radius: 6px; font-size: .75rem; font-weight: 600; }
-        .badge.ok { background: #d1e7dd; color: var(--ok); }
-        .badge.bad { background: #f8d7da; color: var(--danger); }
-        label { display: block; font-weight: 500; margin: .75rem 0 .25rem; font-size: .9rem; }
-        input, select { width: 100%; padding: .5rem .65rem; border: 1px solid #ced4da; border-radius: 8px; font-size: 1rem; }
-        .row { display: grid; gap: .75rem; }
-        @media (min-width: 520px) { .row-2 { grid-template-columns: 1fr 1fr; } }
-        .btn { display: inline-block; margin-top: 1rem; padding: .55rem 1.25rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; text-decoration: none; font-weight: 500; }
-        .btn:hover { filter: brightness(1.05); }
-        .btn:disabled { opacity: .5; cursor: not-allowed; }
-        .muted { color: var(--muted); font-size: .85rem; margin-top: .25rem; }
-        .err { color: var(--danger); font-size: .9rem; margin: .5rem 0 0; }
-        code { background: #f1f3f5; padding: .1rem .35rem; border-radius: 4px; font-size: .88em; }
+        body { background: #f5f7fb; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; margin: 0; }
+        .installer-shell { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+        .header-title { font-weight: 600; color: #000; font-size: 1.5rem; }
+        .notification-panel {
+            border-radius: 12px; background: #ffffff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+            padding: 1.5rem; margin-bottom: 1rem;
+        }
+        .profile-tabs { display: flex; gap: 12px; background: white; border-radius: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+        .profile-tab {
+            flex: 1; text-align: center; padding: 10px 14px; border-radius: 10px; font-weight: 500; color: #000;
+            background: white; font-size: 0.92rem; min-width: 90px; border: none; text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .profile-tab.active { background: #d9e1ef; font-weight: 600; }
+        .profile-tab:not(.active):hover { background: #f8f9fa; color: #000; }
+        .profile-tab:disabled { opacity: 0.45; pointer-events: none; }
+        .section-title {
+            font-size: 1.15rem; font-weight: 600; color: #333; margin-bottom: 1rem;
+            border-bottom: 2px solid #0d6efd; padding-bottom: 0.5rem; display: inline-block;
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #0d6efd, #0b5ed7); border: none; color: white !important;
+            padding: 8px 18px; transition: all 0.3s;
+        }
+        .btn-gradient:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25); color: white !important; }
+        .btn-gradient:disabled { opacity: 0.55; transform: none; }
+        .console-panel {
+            background: #1e1e1e; color: #d4d4d4; font-family: Consolas, 'Courier New', monospace;
+            font-size: 0.8rem; border-radius: 10px; padding: 1rem; max-height: 320px; overflow: auto;
+            white-space: pre-wrap; word-break: break-word; min-height: 120px;
+        }
+        .console-panel:empty::before { content: 'Вывод команд появится здесь…'; color: #6e6e6e; }
+        .progress { height: 10px; border-radius: 8px; }
+        .progress-bar { transition: width 0.35s ease; }
+        table.install-checks { font-size: 0.9rem; }
+        table.install-checks td { vertical-align: top; }
     </style>
 </head>
 <body>
-<div class="wrap">
-    <h1>Установка IT-Master</h1>
-    <p class="sub">Мастер создаст <code>.env</code>, применит миграции и заполнит базу начальными данными (включая демо-пользователя).</p>
+<div class="installer-shell">
+    <h1 class="header-title mb-1"><i class="bi bi-gear-wide-connected text-primary me-2"></i>Установка IT-Master</h1>
+    <p class="text-muted mb-4">Мастер поможет поставить Composer, зависимости, создать <code>.env</code> и подготовить базу.</p>
 
-    <div class="steps">
-        <span class="<?= $step === 1 ? 'on' : '' ?>">1. Проверка</span>
-        <span class="<?= $step === 2 ? 'on' : '' ?>">2. Настройка</span>
+    <div class="profile-tabs" role="tablist">
+        <a class="profile-tab <?= $step === 1 ? 'active' : '' ?>" href="?step=1">1. Проверка</a>
+        <a class="profile-tab <?= $step === 2 ? 'active' : '' ?>" href="?step=2" <?= ! $req['core_ok'] || $dirErrors !== [] ? 'tabindex="-1" style="opacity:.5;pointer-events:none"' : '' ?>>2. Composer</a>
+        <a class="profile-tab <?= $step === 3 ? 'active' : '' ?>" href="?step=3" <?= ! $req['core_ok'] || $dirErrors !== [] ? 'tabindex="-1" style="opacity:.5;pointer-events:none"' : '' ?>>3. Настройка</a>
     </div>
 
     <?php if ($dirErrors !== []): ?>
-        <div class="card">
-            <p class="err"><strong>Каталоги:</strong></p>
-            <ul><?php foreach ($dirErrors as $e) { echo '<li>'.installer_h($e).'</li>'; } ?></ul>
+        <div class="notification-panel border border-danger border-opacity-25">
+            <div class="section-title text-danger">Каталоги</div>
+            <ul class="mb-0"><?php foreach ($dirErrors as $e) {
+                echo '<li>'.installer_h($e).'</li>';
+            } ?></ul>
         </div>
     <?php endif; ?>
 
+    <div class="mb-3 d-none" id="global-progress-wrap">
+        <div class="d-flex justify-content-between small text-muted mb-1">
+            <span id="global-progress-label">Выполняется…</span>
+            <span id="global-progress-pct">0%</span>
+        </div>
+        <div class="progress">
+            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="global-progress-bar" role="progressbar" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div class="notification-panel">
+        <div class="section-title">Консоль</div>
+        <div class="console-panel" id="installer-console"></div>
+    </div>
+
     <?php if ($step === 1): ?>
-        <div class="card">
-            <h2 style="font-size:1.1rem;margin:0 0 1rem">Требования</h2>
-            <table>
-                <?php foreach ($req['checks'] as $c): ?>
-                    <tr>
-                        <td><?= installer_h($c['label']) ?></td>
-                        <td>
-                            <span class="badge <?= $c['ok'] ? 'ok' : 'bad' ?>"><?= $c['ok'] ? 'Ок' : 'Нет' ?></span>
-                            <div class="muted"><?= installer_h($c['detail']) ?></div>
-                        </td>
-                    </tr>
-                <?php endforeach; ?>
-            </table>
-            <?php if (! $req['ok']): ?>
-                <p class="err">Устраните отмеченные проблемы и обновите страницу. Обычно достаточно в корне проекта выполнить:</p>
-                <pre style="background:#f8f9fa;padding:.75rem;border-radius:8px;overflow:auto">composer install</pre>
+        <div class="notification-panel">
+            <div class="section-title">Требования</div>
+            <div class="table-responsive">
+                <table class="table install-checks mb-0">
+                    <tbody>
+                    <?php foreach ($req['checks'] as $c): ?>
+                        <tr>
+                            <td><?= installer_h($c['label']) ?></td>
+                            <td>
+                                <?php if ($c['ok']): ?>
+                                    <span class="badge text-bg-success">Ок</span>
+                                <?php else: ?>
+                                    <span class="badge text-bg-danger">Нет</span>
+                                <?php endif; ?>
+                                <div class="text-muted small"><?= installer_h($c['detail']) ?></div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php if (! $req['core_ok']): ?>
+                <p class="text-danger small mt-3 mb-0">Устраните проблемы и обновите страницу. Обязательны: PHP 8.2+, основные расширения, <code>proc_open</code>, читаемый <code>.env.example</code>.</p>
             <?php endif; ?>
-            <p style="margin-top:1rem">
-                <?php if ($req['ok'] && $dirErrors === []): ?>
-                    <a class="btn" href="?step=2">Далее →</a>
+            <div class="mt-3">
+                <?php if ($req['core_ok'] && $dirErrors === []): ?>
+                    <a class="btn btn-gradient" href="?step=2">Далее: Composer <i class="bi bi-arrow-right ms-1"></i></a>
                 <?php else: ?>
-                    <button class="btn" type="button" disabled>Далее →</button>
+                    <button class="btn btn-gradient" type="button" disabled>Далее: Composer</button>
                 <?php endif; ?>
-            </p>
+            </div>
         </div>
     <?php endif; ?>
 
     <?php if ($step === 2): ?>
-        <?php if (! $req['ok'] || $dirErrors !== []): ?>
-            <div class="card"><p class="err">Сначала пройдите шаг 1 — не все требования выполнены.</p>
-                <a class="btn" href="?step=1">← Назад</a></div>
-        <?php else: ?>
-            <form class="card" method="post" action="install.php">
-                <input type="hidden" name="installer_action" value="install">
-                <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
+        <div class="notification-panel">
+            <?php if (! $req['core_ok'] || $dirErrors !== []): ?>
+                <p class="text-danger">Сначала пройдите шаг 1.</p>
+                <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> Назад</a>
+            <?php else: ?>
+                <div class="section-title">Composer</div>
+                <p class="text-muted small">Скачивание выполняется командами с официального сайта и проверкой SHA-384 (как в документации Composer).</p>
+                <p class="small mb-2">Ожидаемый хэш установщика зафиксирован в <code>install.php</code> (константа). Если установщик обновился на getcomposer.org, хэш нужно обновить вручную.</p>
 
-                <label for="app_name">Название приложения (APP_NAME)</label>
-                <input id="app_name" name="app_name" required value="<?= installer_h($_POST['app_name'] ?? 'IT-Master') ?>">
-
-                <label for="app_url">URL сайта (APP_URL)</label>
-                <input id="app_url" name="app_url" required placeholder="http://localhost:8000" value="<?= installer_h($_POST['app_url'] ?? ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https' : 'http').'://'.($_SERVER['HTTP_HOST'] ?? 'localhost'))) ?>">
-                <p class="muted">Укажите тот адрес, по которому открывают систему в браузере.</p>
-
-                <label for="db_connection">База данных</label>
-                <select id="db_connection" name="db_connection">
-                    <option value="sqlite" selected>SQLite (файл database/database.sqlite)</option>
-                    <option value="mysql">MySQL / MariaDB</option>
-                </select>
-
-                <div id="mysql-fields" style="display:none;margin-top:.5rem">
-                    <div class="row row-2">
-                        <div>
-                            <label for="db_host">Хост</label>
-                            <input id="db_host" name="db_host" value="<?= installer_h($_POST['db_host'] ?? '127.0.0.1') ?>">
-                        </div>
-                        <div>
-                            <label for="db_port">Порт</label>
-                            <input id="db_port" name="db_port" value="<?= installer_h($_POST['db_port'] ?? '3306') ?>">
-                        </div>
-                    </div>
-                    <label for="db_database">Имя базы</label>
-                    <input id="db_database" name="db_database" value="<?= installer_h($_POST['db_database'] ?? '') ?>">
-                    <div class="row row-2">
-                        <div>
-                            <label for="db_username">Пользователь</label>
-                            <input id="db_username" name="db_username" value="<?= installer_h($_POST['db_username'] ?? 'root') ?>">
-                        </div>
-                        <div>
-                            <label for="db_password">Пароль</label>
-                            <input id="db_password" name="db_password" type="password" value="">
-                        </div>
-                    </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button type="button" class="btn btn-gradient" id="btn-composer-phar">
+                        <i class="bi bi-download me-1"></i> Скачать composer.phar
+                    </button>
+                    <button type="button" class="btn btn-outline-primary" id="btn-composer-install" <?= ! $hasComposerPhar ? 'disabled' : '' ?>>
+                        <i class="bi bi-box-seam me-1"></i> Установить зависимости (composer install)
+                    </button>
                 </div>
 
-                <p class="muted">Будут выполнены: <code>php artisan key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
+                <p class="small mb-0">
+                    <?php if ($req['vendor_ok']): ?>
+                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Каталог <code>vendor/</code> найден — можно переходить к настройке.</span>
+                    <?php else: ?>
+                        <span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>После успешного <code>composer install</code> откроется шаг 3.</span>
+                    <?php endif; ?>
+                </p>
 
-                <a class="btn" href="?step=1" style="background:#6c757d;margin-right:.5rem">← Назад</a>
-                <button class="btn" type="submit">Установить</button>
-            </form>
-            <script>
-                (function () {
-                    var sel = document.getElementById('db_connection');
-                    var box = document.getElementById('mysql-fields');
-                    function sync() { box.style.display = sel.value === 'mysql' ? 'block' : 'none'; }
-                    sel.addEventListener('change', sync);
-                    sync();
-                })();
-            </script>
-        <?php endif; ?>
+                <div class="mt-3 d-flex flex-wrap gap-2">
+                    <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> Назад</a>
+                    <a class="btn btn-gradient <?= $req['vendor_ok'] ? '' : 'disabled' ?>" href="<?= $req['vendor_ok'] ? '?step=3' : '#' ?>" id="link-step3" <?= $req['vendor_ok'] ? '' : 'aria-disabled="true" onclick="return false;"' ?>>Далее: настройка <i class="bi bi-arrow-right ms-1"></i></a>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($step === 3): ?>
+        <div class="notification-panel">
+            <?php if (! $req['vendor_ok'] || ! $req['core_ok'] || $dirErrors !== []): ?>
+                <p class="text-danger">Нужны выполненные шаги 1–2 и каталог <code>vendor/</code>.</p>
+                <a class="btn btn-secondary" href="?step=2">К Composer</a>
+            <?php else: ?>
+                <div class="section-title">Параметры приложения</div>
+                <form id="form-finalize" class="row g-3">
+                    <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
+
+                    <div class="col-12">
+                        <label class="form-label" for="app_name">Название (APP_NAME)</label>
+                        <input class="form-control" id="app_name" name="app_name" required value="<?= installer_h($_POST['app_name'] ?? 'IT-Master') ?>">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="app_url">URL сайта (APP_URL)</label>
+                        <input class="form-control" id="app_url" name="app_url" required placeholder="http://localhost:8000" value="<?= installer_h($_POST['app_url'] ?? $defaultUrl) ?>">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="db_connection">База данных</label>
+                        <select class="form-select" id="db_connection" name="db_connection">
+                            <option value="sqlite" selected>SQLite</option>
+                            <option value="mysql">MySQL / MariaDB</option>
+                        </select>
+                    </div>
+                    <div id="mysql-fields" class="col-12" style="display:none">
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <label class="form-label" for="db_host">Хост</label>
+                                <input class="form-control" id="db_host" name="db_host" value="127.0.0.1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="db_port">Порт</label>
+                                <input class="form-control" id="db_port" name="db_port" value="3306">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="db_database">Имя базы</label>
+                                <input class="form-control" id="db_database" name="db_database" value="">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="db_username">Пользователь</label>
+                                <input class="form-control" id="db_username" name="db_username" value="root">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="db_password">Пароль</label>
+                                <input class="form-control" id="db_password" name="db_password" type="password" value="">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <p class="small text-muted mb-0">Будут выполнены: <code>php artisan key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap gap-2">
+                        <a class="btn btn-secondary" href="?step=2"><i class="bi bi-arrow-left"></i> Назад</a>
+                        <button type="submit" class="btn btn-gradient" id="btn-finalize">
+                            <i class="bi bi-lightning-charge me-1"></i> Завершить установку
+                        </button>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
     <?php endif; ?>
 </div>
+
+<script src="<?= installer_h($bootstrapJs) ?>" crossorigin="anonymous"></script>
+<script>
+(function () {
+    var token = <?= json_encode($token, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var consoleEl = document.getElementById('installer-console');
+    var progressWrap = document.getElementById('global-progress-wrap');
+    var progressBar = document.getElementById('global-progress-bar');
+    var progressPct = document.getElementById('global-progress-pct');
+    var progressLabel = document.getElementById('global-progress-label');
+
+    function appendConsole(text) {
+        if (!consoleEl) return;
+        consoleEl.textContent += (consoleEl.textContent ? '\n' : '') + text;
+        consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function setProgress(p, label) {
+        p = Math.max(0, Math.min(100, p));
+        if (progressWrap) progressWrap.classList.remove('d-none');
+        if (progressBar) progressBar.style.width = p + '%';
+        if (progressPct) progressPct.textContent = Math.round(p) + '%';
+        if (progressLabel && label) progressLabel.textContent = label;
+    }
+
+    function hideProgressStripes() {
+        if (progressBar) {
+            progressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        }
+    }
+
+    function fakeProgressWhile(task, label, maxBeforeDone) {
+        maxBeforeDone = maxBeforeDone || 88;
+        var p = 5;
+        setProgress(p, label);
+        var id = setInterval(function () {
+            p = Math.min(p + Math.random() * 12, maxBeforeDone);
+            setProgress(p, label);
+        }, 450);
+        return task.finally(function () {
+            clearInterval(id);
+        });
+    }
+
+    function postApi(apiAction, fields) {
+        var body = new URLSearchParams();
+        body.set('api_action', apiAction);
+        body.set('installer_token', token);
+        if (fields) {
+            fields.forEach(function (pair) {
+                body.set(pair[0], pair[1]);
+            });
+        }
+        return fetch('install.php', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+            },
+            body: body.toString()
+        }).then(function (r) {
+            return r.text().then(function (t) {
+                try {
+                    return JSON.parse(t);
+                } catch (e) {
+                    throw new Error(t.slice(0, 800) || ('HTTP ' + r.status));
+                }
+            });
+        });
+    }
+
+    var btnPhar = document.getElementById('btn-composer-phar');
+    if (btnPhar) {
+        btnPhar.addEventListener('click', function () {
+            btnPhar.disabled = true;
+            appendConsole('--- Скачивание composer.phar ---');
+            fakeProgressWhile(
+                postApi('composer_phar').then(function (data) {
+                    appendConsole(data.log || JSON.stringify(data));
+                    setProgress(100, data.ok ? 'Готово' : 'Ошибка');
+                    hideProgressStripes();
+                    if (data.ok) {
+                        var btnInst = document.getElementById('btn-composer-install');
+                        if (btnInst) btnInst.disabled = false;
+                    }
+                }).catch(function (e) {
+                    appendConsole('Ошибка сети: ' + e);
+                    setProgress(100, 'Ошибка');
+                    hideProgressStripes();
+                }),
+                'Загрузка и установка Composer…'
+            ).finally(function () { btnPhar.disabled = false; });
+        });
+    }
+
+    var btnCi = document.getElementById('btn-composer-install');
+    if (btnCi) {
+        btnCi.addEventListener('click', function () {
+            btnCi.disabled = true;
+            appendConsole('\n--- composer install ---');
+            fakeProgressWhile(
+                postApi('composer_install').then(function (data) {
+                    appendConsole(data.log || JSON.stringify(data));
+                    setProgress(100, data.ok ? 'Зависимости установлены' : 'Ошибка');
+                    hideProgressStripes();
+                    if (data.ok && data.vendor_ok) {
+                        var a = document.getElementById('link-step3');
+                        if (a) {
+                            a.classList.remove('disabled');
+                            a.setAttribute('href', '?step=3');
+                            a.removeAttribute('aria-disabled');
+                            a.onclick = null;
+                        }
+                    }
+                }).catch(function (e) {
+                    appendConsole('Ошибка: ' + e);
+                    setProgress(100, 'Ошибка');
+                    hideProgressStripes();
+                }),
+                'composer install (может занять несколько минут)…',
+                92
+            ).finally(function () { btnCi.disabled = false; });
+        });
+    }
+
+    var dbSel = document.getElementById('db_connection');
+    var mysqlBox = document.getElementById('mysql-fields');
+    if (dbSel && mysqlBox) {
+        function syncDb() {
+            mysqlBox.style.display = dbSel.value === 'mysql' ? 'block' : 'none';
+        }
+        dbSel.addEventListener('change', syncDb);
+        syncDb();
+    }
+
+    var formFin = document.getElementById('form-finalize');
+    if (formFin) {
+        formFin.addEventListener('submit', function (ev) {
+            ev.preventDefault();
+            var btn = document.getElementById('btn-finalize');
+            if (btn) btn.disabled = true;
+            appendConsole('\n--- Завершение установки (artisan) ---');
+            var fd = new FormData(formFin);
+            var pairs = [];
+            fd.forEach(function (v, k) { pairs.push([k, v]); });
+
+            fakeProgressWhile(
+                postApi('finalize', pairs).then(function (data) {
+                    appendConsole(data.log || JSON.stringify(data));
+                    setProgress(100, data.ok ? 'Установка завершена' : 'Ошибка');
+                    hideProgressStripes();
+                    if (data.ok) {
+                        var wrap = document.createElement('div');
+                        wrap.className = 'alert alert-success mt-3';
+                        wrap.innerHTML = '<strong>Готово.</strong> Перейдите на <a href="/" class="alert-link">главную</a>. Демо-вход: <code>test</code> / <code>123</code>. Удалите или защитите <code>public/install.php</code> на production.';
+                        formFin.appendChild(wrap);
+                    }
+                }).catch(function (e) {
+                    appendConsole('Ошибка: ' + e);
+                    setProgress(100, 'Ошибка');
+                    hideProgressStripes();
+                }),
+                'Миграции и сиды…',
+                90
+            ).finally(function () { if (btn) btn.disabled = false; });
+        });
+    }
+})();
+</script>
 </body>
 </html>
