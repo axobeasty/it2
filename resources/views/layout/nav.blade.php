@@ -208,6 +208,12 @@
             </ul>
 
                 <div class="d-flex flex-lg-grow-1 justify-content-lg-end align-items-center gap-2 flex-shrink-0 navbar-app-user-actions">
+                <a href="/dashboard#dashboard-notifications" class="nav-link nav-link-custom position-relative px-3 py-2 rounded-3" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Уведомления">
+                    <i class="bi bi-bell fs-5 opacity-75"></i>
+                    @if(($unreadNotifsCount ?? 0) > 0)
+                        <span class="position-absolute badge rounded-pill bg-danger navbar-notif-badge">{{ ($unreadNotifsCount ?? 0) > 99 ? '99+' : $unreadNotifsCount }}</span>
+                    @endif
+                </a>
                 @if($canDashboard)
                     <a href="/profile" class="nav-link nav-link-custom px-3 py-2 rounded-3 small" data-bs-toggle="tooltip" data-bs-placement="bottom" title="{{ $user->fio ?? 'Профиль' }}">
                         <i class="bi bi-person-circle fs-5 opacity-75"></i>
@@ -424,5 +430,16 @@
     }
     .navbar.navbar-icon-only .dropdown-menu {
         min-width: auto;
+    }
+
+    .navbar-notif-badge {
+        top: 0.15rem;
+        right: 0.15rem;
+        left: auto;
+        transform: none;
+        font-size: 0.65rem;
+        min-width: 1.15rem;
+        padding: 0.2em 0.42em;
+        line-height: 1;
     }
 </style>

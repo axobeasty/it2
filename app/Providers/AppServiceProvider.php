@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\Notifs;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -24,6 +26,18 @@ class AppServiceProvider extends ServiceProvider
     {
         setlocale(LC_ALL, 'ru_RU.utf8');
         Carbon::setLocale(config('app.locale'));
+
+        View::composer('layout.nav', function ($view) {
+            $user = $view->offsetGet('user') ?? null;
+            $unread = 0;
+            if ($user && isset($user->id)) {
+                $unread = Notifs::query()
+                    ->where('employee_id', (int) $user->id)
+                    ->where('is_read', false)
+                    ->count();
+            }
+            $view->with('unreadNotifsCount', $unread);
+        });
 
         $activeProfile = (string) env('DB_ACTIVE_PROFILE', 'sqlite');
         if ($activeProfile !== 'remote') {

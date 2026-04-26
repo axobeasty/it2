@@ -263,7 +263,7 @@
             </main>
         </div>
         <div class="col-12 col-lg-3 p-3">
-            <div class="notification-panel">
+            <div class="notification-panel" id="dashboard-notifications">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h5 class="header-title">Уведомления</h5>
                     <span class="position-relative" >
