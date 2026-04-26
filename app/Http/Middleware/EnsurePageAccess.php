@@ -35,21 +35,15 @@ class EnsurePageAccess
             return redirect('/');
         }
 
-        $user = $sessionUser;
-        $lastRefreshAt = (int) $request->session()->get('user_permissions_refreshed_at', 0);
-        $needsRefresh = ! $user->relationLoaded('role') || (time() - $lastRefreshAt) > 120;
-        if ($needsRefresh) {
-            $freshUser = Employee::with('role.pagePermissions')->find($sessionUser->id);
-            if (! $freshUser) {
-                $request->session()->forget('user');
-                Toastr::error('Сессия недействительна', 'Войдите в систему снова.', ['progressBar' => true]);
-                return redirect('/');
-            }
-
-            $user = $freshUser;
-            $request->session()->put('user', $user);
-            $request->session()->put('user_permissions_refreshed_at', time());
+        $freshUser = Employee::with('role.pagePermissions')->find($sessionUser->id);
+        if (! $freshUser) {
+            $request->session()->forget('user');
+            Toastr::error('Сессия недействительна', 'Войдите в систему снова.', ['progressBar' => true]);
+            return redirect('/');
         }
+
+        $user = $freshUser;
+        $request->session()->put('user', $user);
 
         $pageKey = PageAccess::pathToPageKey($request->path());
         if (!$pageKey) {

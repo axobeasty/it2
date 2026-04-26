@@ -24,13 +24,34 @@
         .roles-toolbar .form-control {
             max-width: 18rem;
         }
+        .perm-toggle {
+            margin: 0;
+        }
+        /* Невидимый чекбокс поверх «кнопки», чтобы клик всегда переключал значение и уходил в POST */
+        .perm-toggle__input {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 2;
+            -webkit-appearance: none;
+            appearance: none;
+        }
         .perm-toggle__face {
             cursor: pointer;
             user-select: none;
+            position: relative;
+            z-index: 1;
+            pointer-events: none;
+            min-height: 3rem;
             transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             border-color: #e2e8f0 !important;
             background-color: #f8fafc;
             color: #64748b;
+            box-sizing: border-box;
         }
         .perm-toggle__face:hover {
             border-color: #cbd5e1 !important;
@@ -40,11 +61,14 @@
             outline: 2px solid rgba(13, 110, 253, 0.45);
             outline-offset: 2px;
         }
+        .perm-toggle__input:focus {
+            outline: none;
+        }
         .perm-toggle__input:checked + .perm-toggle__face {
             background-color: #0d6efd;
             border-color: #0d6efd !important;
             color: #fff;
-            box-shadow: 0 2px 8px rgba(13, 110, 253, 0.35);
+            box-shadow: 0 2px 10px rgba(13, 110, 253, 0.28);
         }
         .perm-toggle__input:checked + .perm-toggle__face:hover {
             background-color: #0b5ed7;
