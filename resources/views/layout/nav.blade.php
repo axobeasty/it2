@@ -442,4 +442,43 @@
         padding: 0.2em 0.42em;
         line-height: 1;
     }
+
+    /* Телефоны: в раскрытом меню показываем подписи к пунктам (на десктопе остаётся «только иконки»). */
+    @media (max-width: 991.98px) {
+        .navbar.navbar-icon-only .nav-link-custom .nav-text {
+            display: inline !important;
+        }
+        .navbar.navbar-icon-only .nav-link-custom i {
+            margin-right: 0.5rem !important;
+            font-size: 1.1rem !important;
+        }
+        .navbar.navbar-icon-only .nav-link-custom.dropdown-toggle::after {
+            display: inline-block !important;
+        }
+        .navbar.navbar-icon-only .navbar-nav {
+            gap: 0.15rem;
+        }
+        .navbar.navbar-icon-only .nav-link-custom {
+            padding-top: 0.65rem !important;
+            padding-bottom: 0.65rem !important;
+        }
+        .navbar.navbar-icon-only .dropdown-menu {
+            min-width: 100%;
+        }
+        .navbar .dropdown-item {
+            min-height: 2.75rem;
+            align-items: center;
+        }
+        .navbar-toggler-icon {
+            width: 1.35em;
+            height: 1.35em;
+        }
+    }
+
+    @supports (padding: max(0px)) {
+        .navbar.sticky-top {
+            padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
+            padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
+        }
+    }
 </style>

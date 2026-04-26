@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>@yield('page_title', $settings->title ?? 'Настройки')</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
@@ -53,6 +54,16 @@
             color: #1e293b;
             margin-bottom: 0.35rem;
         }
+
+        @media (max-width: 991.98px) {
+            .settings-body {
+                min-height: 100dvh;
+            }
+            .settings-shell .settings-side-nav .list-group-item {
+                min-height: 2.75rem;
+                align-items: center;
+            }
+        }
     </style>
     @stack('settings_head')
 </head>
@@ -65,7 +76,7 @@
 
 <div class="container-fluid settings-shell py-4 px-3 px-lg-4 pb-5 mx-auto">
     <div class="row g-4">
-        <div class="col-lg-3 col-xl-3">
+        <div class="col-12 col-lg-3 col-xl-3 order-2 order-lg-1">
             <div class="sticky-lg-top" style="top: 5.5rem; z-index: 100;">
                 <div class="rounded-4 bg-white shadow-sm p-3 mb-3">
                     <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom border-light">
@@ -102,7 +113,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-9 col-xl-9">
+        <div class="col-12 col-lg-9 col-xl-9 order-1 order-lg-2">
             <div class="card settings-main-card">
                 <div class="card-body p-4 p-lg-5">
                     <header class="mb-4 pb-3 border-bottom border-light">

@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }} — Подтверждение портфолио</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
@@ -19,13 +20,12 @@
     </style>
 </head>
 <body>
-<div class="container-fluid p-0" style="height: 100vh;">
+<div class="container-fluid p-0 app-shell" style="min-height: 100dvh;">
     <div class="row g-0">
-        @include('layout.nav')
-        <div class="col-12 col-lg-2 p-3 pt-2 pt-lg-3 sidebar-offcanvas-column">
-            @include('layout.sidebar_offcanvas')
+        <div class="col-12 p-0">
+            @include('layout.nav')
         </div>
-        <div class="col-12 col-lg p-3">
+        <div class="col-12 col-lg p-3 order-1 order-lg-2">
             <div class="bg-white p-4 rounded shadow-sm card-custom">
                 <h4 class="header-title mb-1">Подтверждение портфолио</h4>
                 <p class="text-muted small mb-4">Выберите пользователя и утвердите или отклоните позиции со статусом «на проверке».</p>
@@ -116,6 +116,9 @@
                     <div class="alert alert-warning mb-0">Пользователь не найден.</div>
                 @endif
             </div>
+        </div>
+        <div class="col-12 col-lg-2 p-0 p-lg-3 pt-lg-2 sidebar-offcanvas-column order-2 order-lg-1">
+            @include('layout.sidebar_offcanvas')
         </div>
     </div>
 </div>

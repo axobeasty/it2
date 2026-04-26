@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }}</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet"
@@ -20,9 +21,24 @@
         }
 
         main {
-            height: calc(100vh - 40px);
+            min-height: 0;
             overflow-y: auto;
-            padding: 1.5rem;
+            padding: 1rem 1.25rem 1.5rem;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 992px) {
+            main {
+                height: calc(100vh - 40px);
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            main {
+                max-height: none;
+                height: auto;
+            }
         }
 
         .card-custom {
@@ -77,12 +93,26 @@
         }
 
         .notification-panel {
-            height: calc(100vh - 40px);
             overflow-y: auto;
             border-radius: 12px;
             background: #ffffff;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-            padding: 1.5rem;
+            padding: 1.25rem;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 992px) {
+            .notification-panel {
+                height: calc(100vh - 40px);
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            .notification-panel {
+                max-height: none;
+                min-height: 12rem;
+            }
         }
 
         .priority-urgent { background: #f8d7da; border-left: 4px solid #dc3545; }
@@ -115,17 +145,27 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
+
+        .app-shell {
+            min-height: 100dvh;
+        }
+
+        @media (min-width: 992px) {
+            .app-shell {
+                height: 100vh;
+            }
+        }
     </style>
 </head>
 <body>
-<div class="container-fluid p-0" style="height: 100vh;">
+<div class="container-fluid p-0 app-shell">
     <div class="row g-0">
-        @include('layout.nav')
-
-        <div class="col-12 col-lg-2 p-3 pt-2 pt-lg-3 sidebar-offcanvas-column">
-            @include('layout.sidebar_offcanvas')
+        <div class="col-12 p-0">
+            @include('layout.nav')
         </div>
-        <div class="col-12 col-lg-7 p-3">
+
+        {{-- На телефоне: сначала контент и уведомления; колонка сайдбара в потоке внизу (offcanvas всё равно fixed). --}}
+        <div class="col-12 col-lg-7 p-3 order-1 order-lg-2">
             <main>
                 @if($showDashboardViewSwitcher ?? false)
                 <div class="card-custom bg-white mb-3 border-0">
@@ -262,7 +302,7 @@
                 @endif
             </main>
         </div>
-        <div class="col-12 col-lg-3 p-3">
+        <div class="col-12 col-lg-3 p-3 order-2 order-lg-3">
             <div class="notification-panel" id="dashboard-notifications">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h5 class="header-title">Уведомления</h5>
@@ -288,6 +328,9 @@
                     @endif
                 </div>
             </div>
+        </div>
+        <div class="col-12 col-lg-2 p-0 p-lg-3 pt-lg-2 sidebar-offcanvas-column order-3 order-lg-1">
+            @include('layout.sidebar_offcanvas')
         </div>
     </div>
 </div>

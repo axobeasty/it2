@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }} — Мои заявки</title>
 
     <!-- Bootstrap 5.3 CSS -->
@@ -76,18 +77,37 @@
         .file-link:hover {
             text-decoration: underline;
         }
+
+        .app-shell {
+            min-height: 100dvh;
+        }
+
+        @media (min-width: 992px) {
+            .app-shell {
+                height: 100vh;
+            }
+            .app-main-scroll {
+                height: calc(100vh - 60px);
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            .app-main-scroll {
+                height: auto !important;
+                min-height: 0;
+            }
+        }
     </style>
 </head>
 <body>
-<div class="container-fluid p-0" style="height: 100vh;">
+<div class="container-fluid p-0 app-shell">
     <div class="row g-0">
-        @include('layout.nav')
-
-        <div class="col-12 col-lg-2 p-3 pt-2 pt-lg-3 sidebar-offcanvas-column">
-            @include('layout.sidebar_offcanvas')
+        <div class="col-12 p-0">
+            @include('layout.nav')
         </div>
-        <div class="col-12 col-lg p-3">
-            <div class="container-fluid px-3" style="height: calc(100vh - 60px);">
+
+        <div class="col-12 col-lg p-3 order-1 order-lg-2">
+            <div class="container-fluid px-0 px-sm-3 app-main-scroll">
                 <div class="row g-3">
                     <div class="col">
                         <div class="bg-white p-4 rounded shadow-sm card-custom">
@@ -263,6 +283,9 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="col-12 col-lg-2 p-0 p-lg-3 pt-lg-2 sidebar-offcanvas-column order-2 order-lg-1">
+            @include('layout.sidebar_offcanvas')
         </div>
     </div>
 

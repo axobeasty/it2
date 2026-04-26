@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }} — Расписание</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
@@ -10,6 +11,7 @@
         body { background: #eef2f8; }
         .schedule-card { border-radius: 14px; border: 1px solid #e2e8f0; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
         .lesson-pill { border-left: 4px solid #0d6efd; background: #f8fafc; border-radius: 0 10px 10px 0; padding: .75rem 1rem; margin-bottom: .6rem; }
+        .week-nav { flex-wrap: wrap; }
         .week-nav .btn { border-radius: 10px; }
         .day-col h5 { font-size: .95rem; color: #475569; margin-bottom: .75rem; padding-bottom: .4rem; border-bottom: 2px solid #e2e8f0; }
     </style>

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\LenientDatetime;
 use App\Support\TestGrading;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,8 +13,8 @@ class TestAttempt extends Model
     protected function casts(): array
     {
         return [
-            'started_at' => 'datetime',
-            'submitted_at' => 'datetime',
+            'started_at' => LenientDatetime::class,
+            'submitted_at' => LenientDatetime::class,
         ];
     }
 

@@ -177,88 +177,101 @@ class MobileApiController extends Controller
      */
     public function testsList(Request $request): JsonResponse
     {
-        $employee = $this->resolveEmployeeFromToken($request);
-        if (! $employee) {
-            return response()->json(['message' => 'Необходима авторизация.'], 401);
-        }
-
-        if (! $employee->canAccessPage('student_tests')) {
-            return response()->json(['message' => 'Нет доступа к тестированию.'], 403);
-        }
-
-        $groupId = (int) ($employee->group_id ?? 0);
-        $tests = collect();
-
-        if ($groupId > 0) {
-            $testIds = Test::query()
-                ->select('tests.id')
-                ->join('test_group_assignments as tga', 'tga.test_id', '=', 'tests.id')
-                ->where('tga.group_id', $groupId)
-                ->where('tga.is_published', true)
-                ->where('tests.is_active', true)
-                ->where(function ($q) {
-                    $q->whereNull('tga.starts_at')->orWhere('tga.starts_at', '<=', Carbon::now());
-                })
-                ->where(function ($q) {
-                    $q->whereNull('tga.ends_at')->orWhere('tga.ends_at', '>=', Carbon::now());
-                })
-                ->distinct()
-                ->pluck('tests.id');
-
-            if ($testIds->isNotEmpty()) {
-                $tests = Test::query()
-                    ->whereIn('id', $testIds)
-                    ->withCount(['questions'])
-                    ->orderByDesc('created_at')
-                    ->get();
+        try {
+            $employee = $this->resolveEmployeeFromToken($request);
+            if (! $employee) {
+                return response()->json(['message' => 'Необходима авторизация.'], 401);
             }
+
+            if (! $employee->canAccessPage('student_tests')) {
+                return response()->json(['message' => 'Нет доступа к тестированию.'], 403);
+            }
+
+            $groupId = (int) ($employee->group_id ?? 0);
+            $tests = collect();
+
+            if ($groupId > 0) {
+                $testIds = Test::query()
+                    ->select('tests.id')
+                    ->join('test_group_assignments as tga', 'tga.test_id', '=', 'tests.id')
+                    ->where('tga.group_id', $groupId)
+                    ->where('tga.is_published', true)
+                    ->where('tests.is_active', true)
+                    ->where(function ($q) {
+                        $q->whereNull('tga.starts_at')->orWhere('tga.starts_at', '<=', Carbon::now());
+                    })
+                    ->where(function ($q) {
+                        $q->whereNull('tga.ends_at')->orWhere('tga.ends_at', '>=', Carbon::now());
+                    })
+                    ->distinct()
+                    ->pluck('tests.id');
+
+                if ($testIds->isNotEmpty()) {
+                    $tests = Test::query()
+                        ->whereIn('id', $testIds)
+                        ->withCount(['questions'])
+                        ->orderByDesc('created_at')
+                        ->get();
+                }
+            }
+
+            $attemptsCountByTest = TestAttempt::where('student_id', $employee->id)
+                ->select('test_id', DB::raw('COUNT(*) as attempts_count'))
+                ->groupBy('test_id')
+                ->pluck('attempts_count', 'test_id')
+                ->mapWithKeys(fn ($count, $testId) => [(int) $testId => (int) $count]);
+
+            $lastAttempts = TestAttempt::where('student_id', $employee->id)
+                ->orderByDesc('submitted_at')
+                ->orderByDesc('id')
+                ->get()
+                ->unique(fn (TestAttempt $a) => (int) $a->test_id)
+                ->keyBy(fn (TestAttempt $a) => (int) $a->test_id);
+
+            $studentId = (int) $employee->id;
+
+            $payload = $tests->map(function (Test $test) use ($attemptsCountByTest, $lastAttempts, $studentId) {
+                $tid = (int) $test->id;
+                $attemptsUsed = (int) ($attemptsCountByTest[$tid] ?? 0);
+                $limit = (int) ($test->attempts_limit ?? 0);
+                $canStart = MobileTestTaking::canStartAttempt($tid, $studentId, $test->attempts_limit);
+
+                $last = $lastAttempts->get($tid);
+                $gradeDisplay = $last ? (string) $last->display_grade : '';
+
+                return [
+                    'id' => $tid,
+                    'title' => $test->title,
+                    'description' => $test->description,
+                    'time_limit_minutes' => $test->time_limit_minutes,
+                    'attempts_limit' => $limit,
+                    'attempts_used' => $attemptsUsed,
+                    'can_start' => $canStart,
+                    'questions_count' => (int) ($test->questions_count ?? 0),
+                    'last_attempt' => $last ? [
+                        'id' => (int) $last->id,
+                        'score' => (int) $last->score,
+                        'max_score' => (int) $last->max_score,
+                        'percentage' => (float) $last->percentage,
+                        'grade' => $gradeDisplay,
+                        'grade_label' => TestGrading::labelRu($gradeDisplay),
+                        'submitted_at' => $last->submitted_at?->toIso8601String(),
+                    ] : null,
+                ];
+            })->values();
+
+            $jsonOpts = JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+
+            return response()->json(['tests' => $payload], 200, [], $jsonOpts);
+        } catch (\Throwable $e) {
+            report($e);
+
+            $detail = config('app.debug') ? $e->getMessage() : null;
+            $message = $detail
+                ?? 'Не удалось загрузить список тестов. Проверьте миграции (таблица test_group_assignments и др.) и лог: storage/logs/laravel.log';
+
+            return response()->json(['message' => $message], 500);
         }
-
-        $attemptsCountByTest = TestAttempt::where('student_id', $employee->id)
-            ->select('test_id', DB::raw('COUNT(*) as attempts_count'))
-            ->groupBy('test_id')
-            ->pluck('attempts_count', 'test_id');
-
-        $lastAttempts = TestAttempt::where('student_id', $employee->id)
-            ->orderByDesc('submitted_at')
-            ->orderByDesc('id')
-            ->get()
-            ->unique('test_id')
-            ->keyBy('test_id');
-
-        $studentId = (int) $employee->id;
-
-        $payload = $tests->map(function (Test $test) use ($attemptsCountByTest, $lastAttempts, $studentId) {
-            $tid = (int) $test->id;
-            $attemptsUsed = (int) ($attemptsCountByTest[$tid] ?? 0);
-            $limit = (int) ($test->attempts_limit ?? 0);
-            $canStart = MobileTestTaking::canStartAttempt($tid, $studentId, $test->attempts_limit);
-
-            $last = $lastAttempts->get($tid);
-            $gradeDisplay = $last ? (string) $last->display_grade : '';
-
-            return [
-                'id' => $tid,
-                'title' => $test->title,
-                'description' => $test->description,
-                'time_limit_minutes' => $test->time_limit_minutes,
-                'attempts_limit' => $limit,
-                'attempts_used' => $attemptsUsed,
-                'can_start' => $canStart,
-                'questions_count' => (int) ($test->questions_count ?? 0),
-                'last_attempt' => $last ? [
-                    'id' => (int) $last->id,
-                    'score' => (int) $last->score,
-                    'max_score' => (int) $last->max_score,
-                    'percentage' => (float) $last->percentage,
-                    'grade' => $gradeDisplay,
-                    'grade_label' => TestGrading::labelRu($gradeDisplay),
-                    'submitted_at' => $last->submitted_at?->toIso8601String(),
-                ] : null,
-            ];
-        })->values();
-
-        return response()->json(['tests' => $payload]);
     }
 
     /**

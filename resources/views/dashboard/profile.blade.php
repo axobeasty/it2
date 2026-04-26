@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
@@ -15,12 +16,6 @@
             font-family: 'Segoe UI', sans-serif;
             margin: 0;
             min-height: 100vh;
-        }
-
-        main {
-            height: calc(100vh - 40px);
-            overflow-y: auto;
-            padding: 1.5rem;
         }
 
         .card-custom {
@@ -75,12 +70,48 @@
         }
 
         .notification-panel {
-            height: calc(100vh - 40px);
             overflow-y: auto;
             border-radius: 12px;
             background: #ffffff;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-            padding: 1.5rem;
+            padding: 1.25rem;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        @media (min-width: 992px) {
+            .notification-panel {
+                height: calc(100vh - 40px);
+                padding: 1.5rem;
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            .notification-panel {
+                max-height: none;
+                height: auto !important;
+            }
+        }
+
+        .app-shell {
+            min-height: 100dvh;
+        }
+
+        @media (min-width: 992px) {
+            .app-shell {
+                height: 100vh;
+            }
+        }
+
+        @media (max-width: 991.98px) {
+            .profile-tabs {
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .profile-tab {
+                min-width: calc(50% - 6px);
+                font-size: 0.85rem;
+                padding: 10px 8px;
+            }
         }
 
         /* Обновлённые вкладки — чистый и современный стиль */
@@ -165,13 +196,12 @@
     </style>
 </head>
 <body>
-<div class="container-fluid p-0" style="height: 100vh;">
+<div class="container-fluid p-0 app-shell">
     <div class="row g-0">
-        @include('layout.nav')
-        <div class="col-12 col-lg-2 p-3 pt-2 pt-lg-3 sidebar-offcanvas-column">
-            @include('layout.sidebar_offcanvas')
+        <div class="col-12 p-0">
+            @include('layout.nav')
         </div>
-        <div class="col-12 col-lg p-3">
+        <div class="col-12 col-lg p-3 order-1 order-lg-2">
             <div class="notification-panel">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h5 class="header-title">Профиль сотрудника: <span class="text-primary">{{ $user->fio }}</span></h5>
@@ -414,6 +444,9 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="col-12 col-lg-2 p-0 p-lg-3 pt-lg-2 sidebar-offcanvas-column order-2 order-lg-1">
+            @include('layout.sidebar_offcanvas')
         </div>
     </div>
 </div>

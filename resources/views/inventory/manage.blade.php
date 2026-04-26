@@ -2,22 +2,32 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{$settings->title}} — Управление инвентарем</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-select@1.14.0-beta3/dist/css/bootstrap-select.min.css">
     <link rel="stylesheet" href="https://cdn.bootcss.com/toastr.js/latest/css/toastr.min.css">
+    <style>
+        .app-shell { min-height: 100dvh; }
+        @media (min-width: 992px) {
+            .app-shell { height: 100vh; }
+            .inv-main-scroll { height: calc(100vh - 40px); }
+        }
+        @media (max-width: 991.98px) {
+            .inv-main-scroll { height: auto !important; min-height: 0; }
+        }
+    </style>
 </head>
 <body style="background:#eaeff6;">
-@include('layout.nav')
-<div class="container-fluid p-0" style="height: 100vh;">
+<div class="container-fluid p-0 app-shell">
     <div class="row g-0">
-        <div class="col-12 col-lg-2 p-3 pt-2 pt-lg-3 sidebar-offcanvas-column">
-            @include('layout.sidebar_offcanvas')
+        <div class="col-12 p-0">
+            @include('layout.nav')
         </div>
-        <div class="col-12 col-lg p-3">
-            <div class="bg-white rounded shadow-sm p-4" style="height: calc(100vh - 40px); overflow: auto;">
+        <div class="col-12 col-lg p-3 order-1 order-lg-2">
+            <div class="bg-white rounded shadow-sm p-4 inv-main-scroll" style="overflow: auto;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h4 class="mb-0">Управление инвентарем</h4>
                     <div class="d-flex gap-2">
@@ -105,6 +115,9 @@
                     {{ $employeePages->links() }}
                 </div>
             </div>
+        </div>
+        <div class="col-12 col-lg-2 p-0 p-lg-3 pt-lg-2 sidebar-offcanvas-column order-2 order-lg-1">
+            @include('layout.sidebar_offcanvas')
         </div>
     </div>
 </div>

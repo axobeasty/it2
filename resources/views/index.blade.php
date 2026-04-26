@@ -2,7 +2,8 @@
 <html lang="ru">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    @include('layout.partials.mobile_meta')
     <title>{{ $settings->title }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet"
           integrity="sha384-4Q6Gf2aSP4eDXB8Miphtr37CMZZQ5oXLH2yaXMJ2w8e2ZtHTl7GptT4jmndRuHDT" crossorigin="anonymous">
@@ -128,18 +129,90 @@
             color: #495057;
         }
 
-        /* Убираем любые возможные зазоры между колонками */
-        .container-fluid, .row, .col-lg-6 {
-            padding: 0;
-            margin: 0;
-            height: 100%;
-            overflow: hidden;
+        .login-stack {
+            min-height: 100dvh;
+        }
+
+        .login-mobile-hero {
+            display: none;
+        }
+
+        @media (max-width: 991.98px) {
+            body {
+                min-height: 100dvh;
+            }
+
+            .login-stack .row {
+                min-height: 100dvh;
+                height: auto !important;
+            }
+
+            .login-stack .col-lg-6 {
+                height: auto !important;
+                overflow: visible !important;
+            }
+
+            .login-mobile-hero {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 1.75rem 1.25rem 1rem;
+                background: linear-gradient(135deg, #0d6efd, #0a58ca);
+                color: #fff;
+            }
+
+            .login-mobile-hero img {
+                width: min(200px, 55vw);
+                height: auto;
+                margin-bottom: 1rem;
+                filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.15));
+            }
+
+            .login-mobile-hero h2 {
+                font-size: 1.15rem;
+                font-weight: 600;
+                margin: 0;
+                line-height: 1.35;
+            }
+
+            .login-mobile-hero p {
+                font-size: 0.9rem;
+                opacity: 0.92;
+                margin: 0.75rem 0 0;
+            }
+
+            .right-section {
+                min-height: auto;
+                border-radius: 0 !important;
+                padding: 1.25rem !important;
+                align-items: flex-start !important;
+            }
+
+            .left-section.d-none {
+                display: none !important;
+            }
+        }
+
+        @media (min-width: 992px) {
+            .container-fluid.login-stack, .login-stack .row, .login-stack .col-lg-6 {
+                padding: 0;
+                margin: 0;
+                height: 100%;
+                overflow: hidden;
+            }
         }
     </style>
 </head>
 <body>
-<div class="container-fluid p-0 h-100">
+<div class="container-fluid p-0 h-100 login-stack">
     <div class="row g-0 h-100">
+        <div class="col-12 login-mobile-hero d-lg-none">
+            <img src="{{ asset('imgs/logo_white.png') }}" alt="" draggable="false">
+            <h2>ГАПОУ «КГАМТ имени Л.Б.Васильева»</h2>
+            <p>Войдите в систему, чтобы продолжить</p>
+        </div>
         <div class="col-lg-6 d-none d-lg-flex p-0">
             <div class="left-section h-100 w-100 ">
                 <img src="{{asset('imgs/logo_white.png')}}" alt="Логотип" class="" draggable="false">
