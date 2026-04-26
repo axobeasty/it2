@@ -37,11 +37,37 @@ function installer_env_quote(string $value): string
     return '"'.str_replace(['\\', '"', "\n", "\r"], ['\\\\', '\"', '', ''], $value).'"';
 }
 
+/**
+ * Путь к PHP CLI для proc_open (artisan, composer-setup, composer.phar).
+ * В IIS/FastCGI PHP_BINARY часто указывает на php-cgi — у него нет флага -r и иной интерфейс.
+ */
 function installer_php_binary(): string
 {
-    $php = PHP_BINARY;
-    if ($php !== '' && @is_executable($php)) {
-        return $php;
+    $binary = (string) PHP_BINARY;
+    $base = strtolower(basename($binary));
+
+    if ($binary !== '' && (str_contains($base, 'php-cgi') || $base === 'php-cgi.exe')) {
+        $dir = dirname($binary);
+        if (PHP_OS_FAMILY === 'Windows') {
+            $candidates = [
+                $dir.DIRECTORY_SEPARATOR.'php.exe',
+                $dir.DIRECTORY_SEPARATOR.'php-win.exe',
+            ];
+        } else {
+            $candidates = [
+                $dir.'/php',
+                (defined('PHP_BINDIR') && PHP_BINDIR !== '') ? rtrim(PHP_BINDIR, '/').'/php' : '',
+            ];
+        }
+        foreach ($candidates as $c) {
+            if ($c !== '' && is_file($c) && @is_executable($c)) {
+                return $c;
+            }
+        }
+    }
+
+    if ($binary !== '' && @is_executable($binary) && ! str_contains(strtolower(basename($binary)), 'php-cgi')) {
+        return $binary;
     }
 
     return 'php';
@@ -98,6 +124,97 @@ function installer_proc(string $command, string $cwd): array
     return ['code' => $code, 'output' => $out];
 }
 
+/**
+ * Скачивает URL в файл без отдельного процесса PHP.
+ * Сначала cURL (не требует allow_url_fopen), иначе file_get_contents при allow_url_fopen.
+ *
+ * @return array{ok: bool, method?: string, error?: string}
+ */
+function installer_fetch_url_to_file(string $url, string $destPath): array
+{
+    if (is_file($destPath)) {
+        @unlink($destPath);
+    }
+
+    if (extension_loaded('curl') && function_exists('curl_init')) {
+        $fp = @fopen($destPath, 'wb');
+        if ($fp === false) {
+            return ['ok' => false, 'error' => 'Не удалось создать файл: '.$destPath.' (права на каталог?)'];
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_FILE => $fp,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 5,
+            CURLOPT_CONNECTTIMEOUT => 30,
+            CURLOPT_TIMEOUT => 180,
+            CURLOPT_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+        ]);
+
+        $execOk = curl_exec($ch);
+        $curlErr = curl_error($ch);
+        $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        fclose($fp);
+
+        if (! $execOk || $httpCode >= 400) {
+            @unlink($destPath);
+            $msg = $curlErr !== '' ? $curlErr : ('HTTP '.$httpCode);
+            if (stripos($curlErr, 'SSL') !== false || stripos($curlErr, 'certificate') !== false) {
+                $msg .= ' — укажите в php.ini openssl.cafile (путь к cacert.pem) или включите корневые сертификаты.';
+            }
+
+            return ['ok' => false, 'error' => 'cURL: '.$msg];
+        }
+
+        if (! is_file($destPath) || filesize($destPath) < 100) {
+            @unlink($destPath);
+
+            return ['ok' => false, 'error' => 'cURL: скачан пустой или слишком короткий файл.'];
+        }
+
+        return ['ok' => true, 'method' => 'curl'];
+    }
+
+    if (filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN)) {
+        $ctx = stream_context_create([
+            'http' => [
+                'timeout' => 180,
+                'follow_location' => 1,
+                'ignore_errors' => false,
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+
+        $data = @file_get_contents($url, false, $ctx);
+        if ($data === false) {
+            $hint = 'Проверьте allow_url_fopen, расширение openssl, сеть и openssl.cafile в php.ini.';
+            if (! extension_loaded('curl')) {
+                $hint .= ' Либо включите extension=curl в php.ini — тогда скачивание пойдёт без allow_url_fopen.';
+            }
+
+            return ['ok' => false, 'error' => 'file_get_contents не смог загрузить URL. '.$hint];
+        }
+
+        if (@file_put_contents($destPath, $data) === false) {
+            return ['ok' => false, 'error' => 'Не удалось записать файл: '.$destPath];
+        }
+
+        return ['ok' => true, 'method' => 'allow_url_fopen'];
+    }
+
+    return [
+        'ok' => false,
+        'error' => 'Нет способа скачать по HTTPS: в php.ini включите allow_url_fopen=On и/или extension=curl. Альтернатива: положите composer.phar в корень проекта вручную.',
+    ];
+}
+
 function installer_requirements(): array
 {
     $checks = [];
@@ -123,10 +240,14 @@ function installer_requirements(): array
     ];
 
     $urlFopen = filter_var(ini_get('allow_url_fopen'), FILTER_VALIDATE_BOOLEAN);
+    $curlOk = extension_loaded('curl');
+    $canFetchHttps = $urlFopen || $curlOk;
     $checks[] = [
-        'label' => 'allow_url_fopen (скачивание Composer)',
-        'ok' => $urlFopen,
-        'detail' => $urlFopen ? 'да' : 'для кнопки «Скачать composer.phar» включите в php.ini или загрузите composer.phar вручную в корень проекта',
+        'label' => 'HTTPS: скачивание Composer',
+        'ok' => $canFetchHttps,
+        'detail' => $canFetchHttps
+            ? ($curlOk ? 'доступно (cURL'.($urlFopen ? ' и allow_url_fopen' : ', allow_url_fopen выключен — ок').')' : 'allow_url_fopen')
+            : 'В php.ini: allow_url_fopen=On и/или extension=curl; либо положите composer.phar в корень проекта',
     ];
 
     $intl = extension_loaded('intl');
@@ -245,21 +366,32 @@ function installer_api_composer_phar(): array
 
     $setupPath = $root.DIRECTORY_SEPARATOR.'composer-setup.php';
 
-    $r1 = installer_proc(
-        escapeshellarg($php).' -r '.escapeshellarg("copy('https://getcomposer.org/installer', 'composer-setup.php');"),
-        $root
-    );
-    $steps[] = ['label' => 'Загрузка composer-setup.php', 'code' => $r1['code'], 'output' => $r1['output']];
-    $log[] = '$ php -r "copy(\'https://getcomposer.org/installer\', \'composer-setup.php\');"'."\n".$r1['output'];
-    if ($r1['code'] !== 0) {
+    $dl = installer_fetch_url_to_file('https://getcomposer.org/installer', $setupPath);
+    $dlOut = $dl['ok']
+        ? ('Успешно, способ: '.($dl['method'] ?? 'unknown'))
+        : (string) ($dl['error'] ?? 'Неизвестная ошибка');
+    $steps[] = [
+        'label' => 'Загрузка composer-setup.php',
+        'code' => $dl['ok'] ? 0 : 1,
+        'output' => $dlOut,
+    ];
+    $log[] = 'Загрузка https://getcomposer.org/installer → composer-setup.php'."\n".$dlOut;
+    if (! $dl['ok']) {
         return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
     }
 
-    $verifyCode = "if (hash_file('sha384', 'composer-setup.php') === '".COMPOSER_INSTALLER_SHA384."') { echo 'Installer verified'.PHP_EOL; } else { echo 'Installer corrupt'.PHP_EOL; unlink('composer-setup.php'); exit(1); }";
-    $r2 = installer_proc(escapeshellarg($php).' -r '.escapeshellarg($verifyCode), $root);
-    $steps[] = ['label' => 'Проверка SHA-384 установщика', 'code' => $r2['code'], 'output' => $r2['output']];
-    $log[] = '$ php -r "hash_file(...composer-setup.php) === <ожидаемый хэш> ..."'."\n".$r2['output'];
-    if ($r2['code'] !== 0) {
+    $hash = @hash_file('sha384', $setupPath);
+    $hashOk = is_string($hash) && hash_equals(COMPOSER_INSTALLER_SHA384, $hash);
+    $verifyMsg = $hashOk
+        ? 'SHA-384 совпадает, установщик проверен.'
+        : ('Неверная контрольная сумма (ожидалось совпадение с константой). Получено: '.($hash ?: 'null'));
+    $steps[] = [
+        'label' => 'Проверка SHA-384 установщика',
+        'code' => $hashOk ? 0 : 1,
+        'output' => $verifyMsg,
+    ];
+    $log[] = 'Проверка SHA-384 composer-setup.php'."\n".$verifyMsg;
+    if (! $hashOk) {
         if (is_file($setupPath)) {
             @unlink($setupPath);
         }
@@ -267,9 +399,10 @@ function installer_api_composer_phar(): array
         return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
     }
 
-    $r3 = installer_proc(escapeshellarg($php).' '.escapeshellarg('composer-setup.php'), $root);
+    $log[] = 'Исполняемый PHP (CLI): '.$php;
+    $r3 = installer_proc(escapeshellarg($php).' -f '.escapeshellarg('composer-setup.php'), $root);
     $steps[] = ['label' => 'Запуск composer-setup.php', 'code' => $r3['code'], 'output' => $r3['output']];
-    $log[] = '$ php composer-setup.php'."\n".$r3['output'];
+    $log[] = '$ '.basename($php).' -f composer-setup.php'."\n".$r3['output'];
     if ($r3['code'] !== 0) {
         if (is_file($setupPath)) {
             @unlink($setupPath);
@@ -278,15 +411,17 @@ function installer_api_composer_phar(): array
         return ['ok' => false, 'steps' => $steps, 'log' => implode("\n\n", $log)];
     }
 
-    $r4 = installer_proc(escapeshellarg($php).' -r '.escapeshellarg("unlink('composer-setup.php');"), $root);
-    $steps[] = ['label' => 'Удаление composer-setup.php', 'code' => $r4['code'], 'output' => $r4['output']];
-    $log[] = '$ php -r "unlink(\'composer-setup.php\');"'."\n".$r4['output'];
+    if (is_file($setupPath)) {
+        @unlink($setupPath);
+    }
+    $steps[] = ['label' => 'Удаление composer-setup.php', 'code' => 0, 'output' => 'Файл удалён.'];
+    $log[] = 'composer-setup.php удалён после установки.';
 
     $phar = $root.DIRECTORY_SEPARATOR.'composer.phar';
     $ok = is_file($phar);
 
     return [
-        'ok' => $ok && $r4['code'] === 0,
+        'ok' => $ok,
         'steps' => $steps,
         'log' => implode("\n\n", $log),
         'composer_phar' => $ok,
