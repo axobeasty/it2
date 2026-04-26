@@ -10,17 +10,20 @@
             <span class="fw-semibold small text-uppercase text-secondary" style="letter-spacing: .03em;">{{ $sectionTitle }}</span>
         </div>
         <div class="card-body py-3 px-3 pt-0">
-            <div class="row g-3">
+            <div class="row g-2">
                 @foreach($sectionItems as $key => $label)
                     @php
                         $inputId = 'perm_'.$idPrefix.'_'.$key;
                         $isChecked = $editableRole !== null && $editableRole->pagePermissions->contains('page_key', $key);
                     @endphp
                     <div class="col-12 col-lg-6">
-                        <div class="form-check form-switch role-perm-switch m-0">
-                            <input class="form-check-input" type="checkbox" role="switch" name="permissions[]" value="{{ $key }}" id="{{ $inputId }}" @checked($isChecked)>
-                            <label class="form-check-label w-100" for="{{ $inputId }}">{{ $label }}</label>
-                        </div>
+                        <label class="perm-toggle w-100 mb-0" for="{{ $inputId }}">
+                            <input class="perm-toggle__input visually-hidden" type="checkbox" name="permissions[]" value="{{ $key }}" id="{{ $inputId }}" @checked($isChecked)>
+                            <span class="perm-toggle__face d-flex align-items-center gap-2 w-100 rounded-3 border px-3 py-2">
+                                <span class="perm-toggle__icon flex-shrink-0" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+                                <span class="perm-toggle__text small flex-grow-1 text-start">{{ $label }}</span>
+                            </span>
+                        </label>
                     </div>
                 @endforeach
             </div>
