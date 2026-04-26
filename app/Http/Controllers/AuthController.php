@@ -63,25 +63,50 @@ class AuthController extends Controller
         }
 
         $user = $request->session()->get('user');
-        $notifs = Notifs::where('employee_id', $user->id)->get();
-        $tasks = Task::where('employees_id', $user->id)->get();
         Carbon::setLocale('ru');
         $time = Carbon::now()->translatedFormat('d F Y H:i');
 
         $employee = Employee::with(['role', 'group'])->findOrFail($user->id);
 
-        $dashboardMainBlock = 'tasks';
-        if (! $employee->canAccessPage('tasks')) {
-            if ($employee->role && $employee->role->name === 'Студент' && $employee->canAccessPage('schedule_my')) {
-                $dashboardMainBlock = 'schedule';
-            } else {
-                $dashboardMainBlock = 'none';
-            }
+        $canTasks = $employee->canAccessPage('tasks');
+        $canSchedule = $employee->canAccessPage('schedule_my');
+
+        $allowedViews = [];
+        if ($canTasks) {
+            $allowedViews[] = 'tasks';
         }
+        if ($canSchedule) {
+            $allowedViews[] = 'schedule';
+        }
+
+        $showDashboardViewSwitcher = count($allowedViews) > 1;
+
+        if ($allowedViews === []) {
+            $dashboardMainBlock = 'none';
+        } elseif (count($allowedViews) === 1) {
+            $dashboardMainBlock = $allowedViews[0];
+        } else {
+            $requested = $request->query('view');
+            if (is_string($requested) && in_array($requested, ['tasks', 'schedule'], true)) {
+                $request->session()->put('dashboard_view', $requested);
+            }
+            $pref = $request->session()->get('dashboard_view', 'tasks');
+            if (! in_array($pref, $allowedViews, true)) {
+                $pref = $allowedViews[0];
+            }
+            $dashboardMainBlock = $pref;
+        }
+
+        $tasks = collect();
+        if ($canTasks) {
+            $tasks = Task::where('employees_id', $user->id)->get();
+        }
+
+        $notifs = Notifs::where('employee_id', $user->id)->get();
 
         $schedulePreview = collect();
         $scheduleWeekMonday = null;
-        if ($dashboardMainBlock === 'schedule') {
+        if ($canSchedule && $dashboardMainBlock === 'schedule') {
             $scheduleWeekMonday = Carbon::now()->startOfWeek(Carbon::MONDAY);
             if ($employee->group_id) {
                 $schedulePreview = GroupScheduleEntry::query()
@@ -105,6 +130,7 @@ class AuthController extends Controller
                 'schedulePreview',
                 'scheduleWeekMonday',
                 'employee',
+                'showDashboardViewSwitcher',
             ));
         }
 

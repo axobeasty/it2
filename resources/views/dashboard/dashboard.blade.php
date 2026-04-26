@@ -127,6 +127,28 @@
         </div>
         <div class="col-12 col-lg-7 p-3">
             <main>
+                @if($showDashboardViewSwitcher ?? false)
+                <div class="card-custom bg-white mb-3 border-0">
+                    <div class="card-body py-3 px-4">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <i class="bi bi-sliders text-primary"></i>
+                                <span class="small text-muted text-uppercase fw-semibold mb-0" style="letter-spacing: .04em;">Вид главной страницы</span>
+                            </div>
+                            <div class="btn-group" role="group" aria-label="Переключение вида главной">
+                                <a href="{{ url('/dashboard?view=tasks') }}"
+                                   class="btn btn-sm {{ ($dashboardMainBlock ?? '') === 'tasks' ? 'btn-gradient' : 'btn-outline-secondary' }}">
+                                    <i class="bi bi-check2-square me-1"></i>Задачи
+                                </a>
+                                <a href="{{ url('/dashboard?view=schedule') }}"
+                                   class="btn btn-sm {{ ($dashboardMainBlock ?? '') === 'schedule' ? 'btn-gradient' : 'btn-outline-secondary' }}">
+                                    <i class="bi bi-calendar-week me-1"></i>Расписание
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                @endif
                 @if(($dashboardMainBlock ?? 'tasks') !== 'none')
                 <div class="card-custom bg-white mb-4">
                     <div class="card-body p-4">
