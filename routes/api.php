@@ -27,6 +27,7 @@ Route::prefix('mobile')->group(function () {
     Route::get('/me', [MobileApiController::class, 'me']);
     Route::get('/schedule', [MobileApiController::class, 'schedule']);
     Route::get('/notifications', [MobileApiController::class, 'notifications']);
+    Route::get('/test-stats', [MobileApiController::class, 'testStats']);
 
     Route::get('/tests', [MobileApiController::class, 'testsList']);
     Route::post('/tests/{id}/session', [MobileApiController::class, 'testBegin'])->whereNumber('id');

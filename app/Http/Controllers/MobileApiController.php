@@ -12,6 +12,7 @@ use App\Models\TestAttempt;
 use App\Support\MobileTestTaking;
 use App\Support\TestSubmissionNotifier;
 use App\Support\TestGrading;
+use App\Support\TestingStatsCollector;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -65,8 +66,11 @@ class MobileApiController extends Controller
             return response()->json(['message' => 'Аккаунт деактивирован.'], 403);
         }
 
-        if (! $employee->canAccessPage('schedule_my') && ! $employee->canAccessPage('student_tests')) {
-            return response()->json(['message' => 'Нет доступа к приложению (нужны «Расписание» или «Тестирование»).'], 403);
+        if (! $employee->canAccessPage('schedule_my')
+            && ! $employee->canAccessPage('student_tests')
+            && ! $employee->canAccessPage('tests_stats')
+            && ! $employee->canAccessPage('tests_admin')) {
+            return response()->json(['message' => 'Нет доступа к приложению (нужны «Расписание», «Тестирование» или права администрирования/статистики тестов).'], 403);
         }
 
         $plainToken = Str::random(64);
@@ -398,6 +402,74 @@ class MobileApiController extends Controller
         ]);
     }
 
+    /**
+     * Статистика прохождения тестов (как веб /tests/stats).
+     * GET /api/mobile/test-stats?group_id=&page=
+     */
+    public function testStats(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+
+        if (! $employee->canAccessPage('tests_stats') && ! $employee->canAccessPage('tests_admin')) {
+            return response()->json(['message' => 'Нет доступа к статистике тестов.'], 403);
+        }
+
+        $data = TestingStatsCollector::collect($request);
+        $page = $data['attempts'];
+
+        $groups = Groups::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Groups $g) => [
+                'id' => (int) $g->id,
+                'name' => (string) $g->name,
+            ])
+            ->values();
+
+        $statsByGroup = [];
+        foreach ($data['statsByGroup'] as $name => $stat) {
+            $statsByGroup[$name] = $stat;
+        }
+
+        $attemptRows = collect($page->items())->map(function (TestAttempt $a) {
+            $grade = $a->display_grade;
+
+            return [
+                'id' => (int) $a->id,
+                'student_fio' => $a->student?->fio,
+                'group_name' => $a->student?->group?->name,
+                'test_title' => $a->test?->title,
+                'score' => (int) $a->score,
+                'max_score' => (int) $a->max_score,
+                'percentage' => (float) $a->percentage,
+                'grade' => $grade,
+                'grade_label' => TestGrading::labelRu($grade),
+                'submitted_at' => $a->submitted_at?->toIso8601String(),
+            ];
+        })->values();
+
+        $jsonOpts = JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+
+        return response()->json([
+            'filter' => [
+                'group_id' => (int) $data['groupId'],
+                'label' => $data['filterLabel'],
+            ],
+            'groups' => $groups,
+            'stats_by_group' => $statsByGroup,
+            'attempts' => [
+                'current_page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'last_page' => $page->lastPage(),
+                'data' => $attemptRows,
+            ],
+        ], 200, [], $jsonOpts);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $token = $this->extractBearerToken($request);
@@ -499,6 +571,8 @@ class MobileApiController extends Controller
             'permissions' => [
                 'schedule_my' => $employee->canAccessPage('schedule_my'),
                 'student_tests' => $employee->canAccessPage('student_tests'),
+                'tests_admin' => $employee->canAccessPage('tests_admin'),
+                'tests_stats' => $employee->canAccessPage('tests_stats'),
             ],
         ];
     }
