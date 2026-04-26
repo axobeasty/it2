@@ -12,7 +12,7 @@ class PageAccess
         'inventory_admin' => ['/inv/manage', '/inv/types', '/inv/departments/manage', '/inv/departments/delete/{id}', '/inv/departments/create', '/inv/departments/{id}/edit', '/inv/assign', '/inv/unassign/{id}', '/inv/unassign-all/{employeeId}', '/inv/reassign/{id}', '/inv/export', '/inv/print'],
         'employees_manage' => ['/employees', '/employees/new', '/employees/edit/{id}', '/employees/delete/{id}', '/employees/deactivate/{id}', '/employees/activate/{id}'],
         'roles_manage' => ['/roles', '/roles/create', '/roles/{id}/edit', '/roles/{id}/delete'],
-        'groups_manage' => ['/groups', '/groups/create', '/groups/{id}/edit', '/groups/{id}/delete', '/groups/{id}/assign-students', '/groups/students/{id}/detach'],
+        'groups_manage' => ['/groups', '/groups/create', '/groups/{id}/edit', '/groups/{id}/delete', '/groups/{id}/assign-students', '/groups/{id}/print-students', '/groups/students/{id}/detach'],
         'faculties_manage' => ['/teachers/faculties', '/teachers/faculties/create', '/teachers/faculties/{id}/edit', '/teachers/faculties/{id}/delete'],
         'chairs_manage' => ['/teachers/chairs', '/teachers/chairs/create', '/teachers/chairs/{id}/edit', '/teachers/chairs/{id}/delete'],
         'portfolio' => ['/profile/portfolio', '/portfolio/add'],

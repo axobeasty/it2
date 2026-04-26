@@ -95,4 +95,13 @@ class GroupController extends Controller
         Toastr::success('Успешно', 'Студент откреплен от группы', ["progressBar"=> true]);
         return redirect('/groups');
     }
+
+    public function printStudents(Request $request, int $id)
+    {
+        $group = Groups::with(['students' => fn ($query) => $query->orderBy('fio')])
+            ->findOrFail($id);
+        $settings = Settings::where('id', 1)->first();
+
+        return view('groups.print-students', compact('group', 'settings'));
+    }
 }

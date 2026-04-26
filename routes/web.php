@@ -52,6 +52,7 @@ Route::get('/groups', [GroupController::class, 'index']);
 Route::post('/groups/create', [GroupController::class, 'create']);
 Route::post('/groups/{id}/edit', [GroupController::class, 'update']);
 Route::get('/groups/{id}/delete', [GroupController::class, 'delete']);
+Route::get('/groups/{id}/print-students', [GroupController::class, 'printStudents']);
 Route::post('/groups/{id}/assign-students', [GroupController::class, 'assignStudents']);
 Route::get('/groups/students/{id}/detach', [GroupController::class, 'detachStudent']);
 

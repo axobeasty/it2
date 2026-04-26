@@ -11,6 +11,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -123,7 +124,34 @@ class SettingsController extends Controller
 
                     $settings->save();
                 }else if($request->input('page') == 'email'){
-                    $settings->email_enabled = $request->input('email_enabled');
+                    $validated = $request->validate([
+                        'email_enabled' => ['required', 'in:0,1'],
+                        'smtp_host' => ['nullable', 'string', 'max:255'],
+                        'smtp_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
+                        'smtp_encryption' => ['nullable', 'in:tls,ssl,none'],
+                        'smtp_username' => ['nullable', 'string', 'max:255'],
+                        'smtp_password' => ['nullable', 'string', 'max:500'],
+                        'mail_from_address' => ['nullable', 'email', 'max:255'],
+                        'mail_from_name' => ['nullable', 'string', 'max:255'],
+                    ]);
+
+                    if ($validated['email_enabled'] === '1' && trim((string) ($validated['smtp_host'] ?? '')) === '') {
+                        Toastr::error('Настройка почты', 'Укажите SMTP-сервер, если включена отправка писем.', ['progressBar' => true]);
+
+                        return redirect('/settings/email')->withInput();
+                    }
+
+                    $settings->email_enabled = $validated['email_enabled'];
+                    $settings->smtp_host = trim((string) ($validated['smtp_host'] ?? '')) ?: null;
+                    $settings->smtp_port = $validated['smtp_port'] ?? null;
+                    $enc = isset($validated['smtp_encryption']) ? trim((string) $validated['smtp_encryption']) : '';
+                    $settings->smtp_encryption = $enc !== '' ? $enc : 'tls';
+                    $settings->smtp_username = trim((string) ($validated['smtp_username'] ?? '')) ?: null;
+                    if (! empty($validated['smtp_password'])) {
+                        $settings->smtp_password = Crypt::encryptString($validated['smtp_password']);
+                    }
+                    $settings->mail_from_address = trim((string) ($validated['mail_from_address'] ?? '')) ?: null;
+                    $settings->mail_from_name = trim((string) ($validated['mail_from_name'] ?? '')) ?: null;
                     $settings->save();
                 }else if($request->input('page') == 'database'){
                     $validated = $request->validate([

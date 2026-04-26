@@ -33,7 +33,8 @@
                         <td>{{ $group->name }}</td>
                         <td>{{ $group->description ?: '—' }}</td>
                         <td>{{ $group->students_count }}</td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
+                            <a href="/groups/{{ $group->id }}/print-students" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer" title="Открыть список для печати">Печать списка</a>
                             <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignStudents{{ $group->id }}">Прикрепить студентов</button>
                             <button class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#editGroup{{ $group->id }}">Редактировать</button>
                             <a href="/groups/{{ $group->id }}/delete" class="btn btn-outline-danger btn-sm">Удалить</a>

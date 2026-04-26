@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Models\Groups;
 use App\Models\Notifs;
+use App\Models\Roles;
 use App\Models\Settings;
 use App\Models\Test;
 use App\Models\TestAttempt;
@@ -200,7 +201,7 @@ class StudentTestingController extends Controller
             'questions' => ['required', 'array', 'min:1'],
         ]);
 
-        DB::transaction(function () use ($validated, $request, $user) {
+        $test = DB::transaction(function () use ($validated, $request, $user) {
             $test = Test::create([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
@@ -230,7 +231,15 @@ class StudentTestingController extends Controller
                     'is_published' => true,
                 ]);
             }
+
+            return $test;
         });
+
+        $this->notifyStudentsAboutAssignedTest(
+            $user,
+            $test,
+            array_unique(array_map('intval', (array) $request->input('group_ids', [])))
+        );
 
         Toastr::success('Успешно', 'Тест создан и выдан выбранным группам', ["progressBar" => true]);
         return redirect('/tests/admin');
@@ -665,6 +674,58 @@ class StudentTestingController extends Controller
         }
 
         return '—';
+    }
+
+    /**
+     * Уведомление каждому студенту выбранных групп о новом назначенном тесте.
+     */
+    private function notifyStudentsAboutAssignedTest(Employee $teacher, Test $test, array $groupIds): void
+    {
+        if (! (bool) $test->is_active) {
+            return;
+        }
+
+        $groupIds = array_values(array_unique(array_filter(array_map('intval', $groupIds))));
+        if ($groupIds === []) {
+            return;
+        }
+
+        $studentRole = Roles::where('name', 'Студент')->first();
+        if (! $studentRole) {
+            return;
+        }
+
+        $limit = (int) ($test->attempts_limit ?? 0);
+        if ($limit <= 0) {
+            $attemptsPart = 'Количество попыток не ограничено.';
+        } else {
+            $attemptsPart = sprintf('Допустимо попыток: %d.', $limit);
+        }
+
+        $teacherName = trim((string) $teacher->fio) !== '' ? trim((string) $teacher->fio) : 'Преподаватель';
+        $title = 'Назначен тест';
+        $message = sprintf(
+            '%s назначил вам тест «%s». %s',
+            $teacherName,
+            $test->title,
+            $attemptsPart
+        );
+        $message = Str::limit($message, 250);
+
+        $studentIds = Employee::query()
+            ->where('role_id', $studentRole->id)
+            ->whereIn('group_id', $groupIds)
+            ->pluck('id')
+            ->unique()
+            ->all();
+
+        foreach ($studentIds as $employeeId) {
+            Notifs::create([
+                'title' => $title,
+                'message' => $message,
+                'employee_id' => $employeeId,
+            ]);
+        }
     }
 
     /**
