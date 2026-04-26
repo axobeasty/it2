@@ -9,6 +9,14 @@ class TestAttempt extends Model
 {
     protected $table = 'test_attempts';
 
+    protected function casts(): array
+    {
+        return [
+            'started_at' => 'datetime',
+            'submitted_at' => 'datetime',
+        ];
+    }
+
     protected $fillable = [
         'test_id',
         'student_id',
