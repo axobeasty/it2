@@ -14,10 +14,25 @@ Route::get('/current-time', function () {
     return $date;
 });
 
+/*
+|--------------------------------------------------------------------------
+| Мобильное приложение (IT-Master Android): префикс /api/mobile/…
+| Тесты: GET/POST …/tests/… и дубликат …/student-tests/… (тот же контроллер).
+|--------------------------------------------------------------------------
+*/
 Route::prefix('mobile')->group(function () {
     Route::get('/health', [MobileApiController::class, 'health']);
     Route::post('/login', [MobileApiController::class, 'login']);
     Route::post('/logout', [MobileApiController::class, 'logout']);
     Route::get('/me', [MobileApiController::class, 'me']);
     Route::get('/schedule', [MobileApiController::class, 'schedule']);
+    Route::get('/notifications', [MobileApiController::class, 'notifications']);
+
+    Route::get('/tests', [MobileApiController::class, 'testsList']);
+    Route::post('/tests/{id}/session', [MobileApiController::class, 'testBegin'])->whereNumber('id');
+    Route::post('/tests/{id}/submit', [MobileApiController::class, 'testSubmit'])->whereNumber('id');
+
+    Route::get('/student-tests', [MobileApiController::class, 'testsList']);
+    Route::post('/student-tests/{id}/session', [MobileApiController::class, 'testBegin'])->whereNumber('id');
+    Route::post('/student-tests/{id}/submit', [MobileApiController::class, 'testSubmit'])->whereNumber('id');
 });
