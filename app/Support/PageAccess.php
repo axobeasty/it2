@@ -72,14 +72,17 @@ class PageAccess
     {
         $labels = self::LABELS;
         $groups = [
-            'Главное' => ['dashboard', 'notifications', 'tasks'],
+            'Главная и ежедневная работа' => ['dashboard', 'notifications', 'tasks'],
             'Заявки' => ['orders_my', 'orders_admin'],
             'Инвентарь' => ['inventory_my', 'inventory_admin'],
-            'Пользователи и группы' => ['employees_manage', 'roles_manage', 'groups_manage'],
-            'Образование и тесты' => ['faculties_manage', 'chairs_manage', 'student_tests', 'tests_admin', 'tests_stats'],
-            'Расписание' => ['schedule_my', 'schedule_teacher', 'schedule_constructor', 'schedule_constructor_settings'],
+            'Пользователи, роли и группы' => ['employees_manage', 'roles_manage', 'groups_manage'],
+            'Образование: факультеты и кафедры' => ['faculties_manage', 'chairs_manage'],
+            'Тестирование' => ['student_tests', 'tests_admin', 'tests_stats'],
+            'Расписание: просмотр' => ['schedule_my', 'schedule_teacher'],
+            'Расписание: конструктор и настройки' => ['schedule_constructor', 'schedule_constructor_settings'],
             'Портфолио' => ['portfolio', 'portfolio_types', 'portfolio_confirm'],
-            'Настройки и доступы' => ['settings', 'settings_database', 'password_manager', 'maintenance_bypass'],
+            'Настройки системы' => ['settings', 'settings_database'],
+            'Безопасность и обслуживание' => ['password_manager', 'maintenance_bypass'],
         ];
 
         $result = [];

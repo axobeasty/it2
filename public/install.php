@@ -633,6 +633,222 @@ function installer_api_ensure_composer_stack(): array
 }
 
 /**
+ * Данные формы шага 3 (без токена).
+ *
+ * @return array{app_name: string, app_url: string, db_connection: string, db_host: string, db_port: string, db_database: string, db_username: string, db_password: string}
+ */
+function installer_finalize_form_data_from_post(): array
+{
+    return [
+        'app_name' => trim((string) ($_POST['app_name'] ?? '')),
+        'app_url' => trim((string) ($_POST['app_url'] ?? '')),
+        'db_connection' => ($_POST['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite',
+        'db_host' => trim((string) ($_POST['db_host'] ?? '')),
+        'db_port' => trim((string) ($_POST['db_port'] ?? '3306')),
+        'db_database' => trim((string) ($_POST['db_database'] ?? '')),
+        'db_username' => trim((string) ($_POST['db_username'] ?? '')),
+        'db_password' => (string) ($_POST['db_password'] ?? ''),
+    ];
+}
+
+/**
+ * Проверка подключения к MySQL (сервер и выбранная база).
+ *
+ * @return array{ok: bool, message: string}
+ */
+function installer_api_mysql_test(array $data): array
+{
+    if (($data['db_connection'] ?? '') !== 'mysql') {
+        return ['ok' => false, 'message' => 'В форме выберите тип БД «MySQL».'];
+    }
+    if (($data['db_database'] ?? '') === '' || ($data['db_username'] ?? '') === '') {
+        return ['ok' => false, 'message' => 'Укажите имя базы и пользователя MySQL.'];
+    }
+    if (! extension_loaded('pdo_mysql')) {
+        return ['ok' => false, 'message' => 'Расширение pdo_mysql не установлено.'];
+    }
+
+    $host = $data['db_host'] !== '' ? $data['db_host'] : '127.0.0.1';
+    $port = $data['db_port'] !== '' ? $data['db_port'] : '3306';
+    $db = $data['db_database'];
+    $user = $data['db_username'];
+    $pass = $data['db_password'];
+
+    $dsnBase = 'mysql:host='.$host.';port='.(int) $port.';charset=utf8mb4';
+
+    try {
+        $pdo = new PDO($dsnBase, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 10,
+        ]);
+        $pdo->query('SELECT 1');
+    } catch (Throwable $e) {
+        return ['ok' => false, 'message' => 'Сервер MySQL недоступен или неверны логин/пароль: '.$e->getMessage()];
+    }
+
+    try {
+        $pdoDb = new PDO($dsnBase.';dbname='.$db, $user, $pass, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_TIMEOUT => 10,
+        ]);
+        $pdoDb->query('SELECT 1');
+    } catch (Throwable $e) {
+        return [
+            'ok' => false,
+            'message' => 'Не удалось открыть базу «'.$db.'». Создайте её в MySQL или проверьте имя. Текст ошибки: '.$e->getMessage(),
+        ];
+    }
+
+    return ['ok' => true, 'message' => 'Подключение к MySQL успешно (сервер и база «'.$db.'»).'];
+}
+
+/**
+ * Проверка: пуста ли БД для миграций (SQLite или MySQL).
+ *
+ * @return array{ok: bool, empty?: bool, table_count?: int, detail?: string, message?: string}
+ */
+function installer_api_db_inspect(array $data): array
+{
+    $dbConn = ($data['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite';
+
+    if ($dbConn === 'mysql') {
+        if (($data['db_database'] ?? '') === '' || ($data['db_username'] ?? '') === '') {
+            return ['ok' => false, 'message' => 'Для MySQL укажите имя БД и пользователя.'];
+        }
+        if (! extension_loaded('pdo_mysql')) {
+            return ['ok' => false, 'message' => 'Расширение pdo_mysql не установлено.'];
+        }
+
+        $host = $data['db_host'] !== '' ? $data['db_host'] : '127.0.0.1';
+        $port = $data['db_port'] !== '' ? $data['db_port'] : '3306';
+        $db = $data['db_database'];
+        $user = $data['db_username'];
+        $pass = $data['db_password'];
+        $dsn = 'mysql:host='.$host.';port='.(int) $port.';dbname='.$db.';charset=utf8mb4';
+
+        try {
+            $pdo = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_TIMEOUT => 15,
+            ]);
+        } catch (Throwable $e) {
+            return ['ok' => false, 'message' => 'MySQL: '.$e->getMessage()];
+        }
+
+        $n = (int) $pdo->query(
+            'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = \'BASE TABLE\''
+        )->fetchColumn();
+
+        $empty = $n === 0;
+        $detail = $empty
+            ? 'База «'.$db.'» пуста (таблиц нет) — можно выполнять миграции.'
+            : 'В базе «'.$db.'» уже есть '.$n.' таблиц. Перед миграциями базу нужно очистить или подтвердить очистку.';
+
+        return ['ok' => true, 'empty' => $empty, 'table_count' => $n, 'detail' => $detail];
+    }
+
+    if (! extension_loaded('pdo_sqlite')) {
+        return ['ok' => false, 'message' => 'Расширение pdo_sqlite не установлено.'];
+    }
+
+    $sqlitePath = installer_project_root().DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'database.sqlite';
+    if (! is_file($sqlitePath) || filesize($sqlitePath) === 0) {
+        return [
+            'ok' => true,
+            'empty' => true,
+            'table_count' => 0,
+            'detail' => 'Файл SQLite отсутствует или пуст — миграции можно выполнять.',
+        ];
+    }
+
+    try {
+        $pdo = new PDO('sqlite:'.$sqlitePath, null, null, [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        ]);
+        $n = (int) $pdo->query(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        )->fetchColumn();
+    } catch (Throwable $e) {
+        return ['ok' => false, 'message' => 'SQLite: '.$e->getMessage()];
+    }
+
+    $empty = $n === 0;
+    $detail = $empty
+        ? 'Файл SQLite без таблиц приложения — можно выполнять миграции.'
+        : 'В SQLite уже '.$n.' таблиц. Перед миграциями базу нужно очистить или подтвердить очистку.';
+
+    return ['ok' => true, 'empty' => $empty, 'table_count' => $n, 'detail' => $detail];
+}
+
+/**
+ * Удаление всех таблиц (MySQL) или пересоздание файла SQLite.
+ *
+ * @return array{ok: bool, log?: string, message?: string}
+ */
+function installer_api_db_wipe(array $data): array
+{
+    $dbConn = ($data['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite';
+
+    if ($dbConn === 'mysql') {
+        if (($data['db_database'] ?? '') === '' || ($data['db_username'] ?? '') === '') {
+            return ['ok' => false, 'message' => 'Для MySQL укажите имя БД и пользователя.'];
+        }
+        if (! extension_loaded('pdo_mysql')) {
+            return ['ok' => false, 'message' => 'Расширение pdo_mysql не установлено.'];
+        }
+
+        $host = $data['db_host'] !== '' ? $data['db_host'] : '127.0.0.1';
+        $port = $data['db_port'] !== '' ? $data['db_port'] : '3306';
+        $db = $data['db_database'];
+        $user = $data['db_username'];
+        $pass = $data['db_password'];
+        $dsn = 'mysql:host='.$host.';port='.(int) $port.';dbname='.$db.';charset=utf8mb4';
+
+        try {
+            $pdo = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_TIMEOUT => 60,
+            ]);
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
+            $stmt = $pdo->query(
+                'SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = \'BASE TABLE\''
+            );
+            $tables = $stmt ? $stmt->fetchAll(PDO::FETCH_COLUMN) : [];
+            foreach ($tables as $table) {
+                if (! is_string($table) || $table === '') {
+                    continue;
+                }
+                $safe = str_replace('`', '``', $table);
+                $pdo->exec('DROP TABLE IF EXISTS `'.$safe.'`');
+            }
+            $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        } catch (Throwable $e) {
+            return ['ok' => false, 'message' => 'Ошибка очистки MySQL: '.$e->getMessage()];
+        }
+
+        return ['ok' => true, 'log' => 'База «'.$db.'» очищена (таблицы удалены).'];
+    }
+
+    if (! extension_loaded('pdo_sqlite')) {
+        return ['ok' => false, 'message' => 'Расширение pdo_sqlite не установлено.'];
+    }
+
+    $sqlitePath = installer_project_root().DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'database.sqlite';
+    try {
+        if (is_file($sqlitePath)) {
+            @unlink($sqlitePath);
+        }
+        if (@touch($sqlitePath) === false) {
+            return ['ok' => false, 'message' => 'Не удалось создать файл database.sqlite'];
+        }
+    } catch (Throwable $e) {
+        return ['ok' => false, 'message' => 'SQLite: '.$e->getMessage()];
+    }
+
+    return ['ok' => true, 'log' => 'Файл SQLite пересоздан (пустой).'];
+}
+
+/**
  * Шаг 1 финализации: проверки и запись .env (быстро). Дальше artisan — отдельными запросами,
  * чтобы один длинный POST не обрывался браузером/прокси (часто на Windows и встроенном сервере PHP).
  */
@@ -855,17 +1071,29 @@ if (
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
         }
+        if (in_array($action, ['mysql_test', 'db_inspect', 'db_wipe'], true)) {
+            if ((int) ($_SESSION['installer_max_step'] ?? 1) < 3) {
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'message' => 'Сначала завершите шаг 2.'], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            $data = installer_finalize_form_data_from_post();
+            if ($action === 'mysql_test') {
+                $payload = installer_api_mysql_test($data);
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            if ($action === 'db_inspect') {
+                $payload = installer_api_db_inspect($data);
+                echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            $payload = installer_api_db_wipe($data);
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'finalize_prepare') {
-            $data = [
-                'app_name' => trim((string) ($_POST['app_name'] ?? '')),
-                'app_url' => trim((string) ($_POST['app_url'] ?? '')),
-                'db_connection' => ($_POST['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite',
-                'db_host' => trim((string) ($_POST['db_host'] ?? '')),
-                'db_port' => trim((string) ($_POST['db_port'] ?? '3306')),
-                'db_database' => trim((string) ($_POST['db_database'] ?? '')),
-                'db_username' => trim((string) ($_POST['db_username'] ?? '')),
-                'db_password' => (string) ($_POST['db_password'] ?? ''),
-            ];
+            $data = installer_finalize_form_data_from_post();
             $payload = installer_api_finalize_prepare($data);
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
@@ -1371,7 +1599,7 @@ header('Content-Type: text/html; charset=utf-8');
                                         </select>
                                     </div>
                                     <div id="mysql-fields" class="col-12" style="display:none">
-                                        <div class="row g-2">
+                                        <div class="row g-2 align-items-end">
                                             <div class="col-6 col-md-3">
                                                 <label class="form-label" for="db_host">Хост</label>
                                                 <input class="form-control" id="db_host" name="db_host" value="127.0.0.1">
@@ -1392,10 +1620,16 @@ header('Content-Type: text/html; charset=utf-8');
                                                 <label class="form-label" for="db_password">Пароль</label>
                                                 <input class="form-control" id="db_password" name="db_password" type="password" value="">
                                             </div>
+                                            <div class="col-12">
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-mysql-test">
+                                                    <i class="bi bi-plug me-1"></i>Проверить подключение к MySQL
+                                                </button>
+                                                <span class="small ms-2" id="mysql-test-result" aria-live="polite"></span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="col-12">
-                                        <p class="installer-footnote mb-0">Будут выполнены: <code>key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
+                                        <p class="installer-footnote mb-0">Перед миграциями проверяется, пуста ли база. Если в ней уже есть таблицы — будет запрос на очистку. Далее: <code>key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
                                     </div>
                                     <div class="col-12 installer-actions d-flex flex-wrap gap-2">
                                         <a class="btn btn-secondary" href="?step=2"><i class="bi bi-arrow-left me-1"></i>Назад</a>
@@ -1560,24 +1794,83 @@ header('Content-Type: text/html; charset=utf-8');
     if (dbSel && mysqlBox) {
         function syncDb() {
             mysqlBox.style.display = dbSel.value === 'mysql' ? 'block' : 'none';
+            var tr = document.getElementById('mysql-test-result');
+            if (tr) tr.textContent = '';
         }
         dbSel.addEventListener('change', syncDb);
         syncDb();
     }
 
+    function pairsFromFinalizeForm(formFin) {
+        var fd = new FormData(formFin);
+        var pairs = [];
+        fd.forEach(function (v, k) { pairs.push([k, v]); });
+        return pairs;
+    }
+
+    function runDbInspectThenPrepare(formFin) {
+        var pairs = pairsFromFinalizeForm(formFin);
+        return postApi('db_inspect', pairs).then(function (ins) {
+            appendConsole(ins.detail || ins.message || '');
+            if (!ins.ok) {
+                return Promise.reject({ ok: false, log: ins.message || 'Ошибка проверки БД' });
+            }
+            if (!ins.empty) {
+                var msg = 'В выбранной базе уже есть ' + ins.table_count + ' таблиц(ы). Удалить все таблицы и продолжить установку? Данные будут безвозвратно удалены.';
+                if (!window.confirm(msg)) {
+                    return Promise.reject({ ok: false, log: 'Установка отменена: база не пуста. Подтвердите очистку или выберите другую базу.' });
+                }
+                return postApi('db_wipe', pairs).then(function (w) {
+                    appendConsole(w.log || w.message || '');
+                    if (!w.ok) {
+                        return Promise.reject({ ok: false, log: w.message || w.log || 'Ошибка очистки БД' });
+                    }
+                });
+            }
+            return Promise.resolve();
+        }).then(function () {
+            return postApi('finalize_prepare', pairs);
+        });
+    }
+
     var formFin = document.getElementById('form-finalize');
+    var btnMysqlTest = document.getElementById('btn-mysql-test');
+    if (btnMysqlTest && formFin) {
+        btnMysqlTest.addEventListener('click', function () {
+            var out = document.getElementById('mysql-test-result');
+            if (out) {
+                out.textContent = '';
+                out.className = 'small ms-2 text-muted';
+            }
+            var pairs = pairsFromFinalizeForm(formFin);
+            postApi('mysql_test', pairs).then(function (r) {
+                if (out) {
+                    out.textContent = r.message || '';
+                    out.className = r.ok ? 'small ms-2 text-success' : 'small ms-2 text-danger';
+                }
+                if (r.ok) {
+                    appendConsole('MySQL: ' + (r.message || 'ок'));
+                } else {
+                    appendConsole('MySQL: ' + (r.message || 'ошибка'));
+                }
+            }).catch(function (e) {
+                if (out) {
+                    out.textContent = formatFetchError(e);
+                    out.className = 'small ms-2 text-danger';
+                }
+            });
+        });
+    }
+
     if (formFin) {
         formFin.addEventListener('submit', function (ev) {
             ev.preventDefault();
             var btn = document.getElementById('btn-finalize');
             if (btn) btn.disabled = true;
-            appendConsole('\n--- Завершение установки (artisan) ---');
-            var fd = new FormData(formFin);
-            var pairs = [];
-            fd.forEach(function (v, k) { pairs.push([k, v]); });
+            appendConsole('\n--- Завершение установки (проверка БД, .env, artisan) ---');
 
             fakeProgressWhile(
-                postApi('finalize_prepare', pairs).then(function (prep) {
+                runDbInspectThenPrepare(formFin).then(function (prep) {
                     appendConsole(prep.log || '');
                     if (!prep.ok) {
                         return Promise.reject(prep);
