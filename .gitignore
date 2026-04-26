@@ -17,6 +17,7 @@
 /public/hot
 /public/storage
 /storage/app/deploy.json
+/storage/framework/installer.lock
 /storage/*.key
 /storage/pail
 /vendor

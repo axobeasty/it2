@@ -10,6 +10,21 @@ if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php'))
     require $maintenance;
 }
 
+// Пока не завершена веб-установка — отправляем на мастер (не требует vendor/)
+$installerLock = __DIR__.'/../storage/framework/installer.lock';
+$installerScript = __DIR__.'/install.php';
+if (
+    PHP_SAPI !== 'cli'
+    && ! is_file($installerLock)
+    && is_file($installerScript)
+) {
+    $uri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+    if (! str_contains($uri, 'install.php')) {
+        header('Location: /install.php', true, 302);
+        exit;
+    }
+}
+
 // Register the Composer autoloader...
 require __DIR__.'/../vendor/autoload.php';
 
