@@ -764,7 +764,20 @@ class SettingsController extends Controller
 
         unset($result['ok']);
 
-        return response()->json(array_merge(['ok' => true], $result));
+        return response()->json(array_merge(['ok' => true], $result, $this->gitReleaseJsonFragment()));
+    }
+
+    /**
+     * @return array{app_release: ?string, app_release_source: 'env'|'version_file'|'deploy_json'|null}
+     */
+    private function gitReleaseJsonFragment(): array
+    {
+        $r = DeployVersion::resolveReleaseVersion(base_path());
+
+        return [
+            'app_release' => $r['version'],
+            'app_release_source' => $r['source'],
+        ];
     }
 
     public function pullGitUpdates(Request $request)
@@ -832,11 +845,11 @@ class SettingsController extends Controller
             }
 
             if (($check['has_updates'] ?? false) !== true) {
-                return response()->json([
+                return response()->json(array_merge([
                     'ok' => true,
                     'updated' => false,
                     'message' => $check['message'] ?? 'Обновлений нет. Репозиторий уже актуален.',
-                ]);
+                ], $this->gitReleaseJsonFragment()));
             }
 
             $pullProcess = $this->runGitProcess(['git', 'pull', '--ff-only'], $basePath);
@@ -871,7 +884,7 @@ class SettingsController extends Controller
                 }
             }
 
-            return response()->json($payload);
+            return response()->json(array_merge($payload, $this->gitReleaseJsonFragment()));
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
@@ -966,6 +979,35 @@ class SettingsController extends Controller
 
             $headSha = trim($this->runGitProcess(['git', 'rev-parse', 'HEAD'], $basePath)->getOutput());
 
+            $remoteVersionLabel = null;
+            $updateChangelog = [];
+            if ($behindCount > 0) {
+                try {
+                    $upstreamSha = trim($this->runGitProcess(['git', 'rev-parse', $upstreamBranch], $basePath)->getOutput());
+                    if ($upstreamSha !== '') {
+                        try {
+                            $remoteVersionLabel = trim($this->runGitProcess(
+                                ['git', 'describe', '--tags', '--always', $upstreamSha],
+                                $basePath
+                            )->getOutput());
+                        } catch (\Throwable) {
+                            $remoteVersionLabel = substr($upstreamSha, 0, 7);
+                        }
+                        if ($remoteVersionLabel === '') {
+                            $remoteVersionLabel = substr($upstreamSha, 0, 7);
+                        }
+                    }
+                    $logs = trim($this->runGitProcess(
+                        ['git', 'log', '--format=%s', '-n', '40', 'HEAD..'.$upstreamBranch],
+                        $basePath
+                    )->getOutput());
+                    if ($logs !== '') {
+                        $updateChangelog = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $logs))));
+                    }
+                } catch (\Throwable) {
+                }
+            }
+
             $row = [
                 'ok' => true,
                 'has_updates' => $behindCount > 0,
@@ -978,6 +1020,8 @@ class SettingsController extends Controller
                 'message' => $behindCount > 0
                     ? "Найдены обновления: {$behindCount} коммит(ов)."
                     : 'Локальный репозиторий уже актуален.',
+                'remote_version_label' => $remoteVersionLabel,
+                'update_changelog' => $updateChangelog,
             ];
 
             if ($behindCount === 0 && $headSha !== '') {
@@ -1085,6 +1129,14 @@ class SettingsController extends Controller
             }
         }
 
+        $remoteVersionLabel = null;
+        $updateChangelog = [];
+        if ($hasUpdates) {
+            $remoteVersionLabel = GitHubDeployApi::rawVersionFile($parsed['owner'], $parsed['repo'], $branch)
+                ?? $tip['short'];
+            $updateChangelog = $cmp['commit_subjects'] ?? [];
+        }
+
         return [
             'ok' => true,
             'has_updates' => $hasUpdates,
@@ -1101,6 +1153,8 @@ class SettingsController extends Controller
             'message' => $msg,
             'deploy_ref_saved' => $deployRefSaved,
             'deploy_ref_note' => $deployRefNote,
+            'remote_version_label' => $remoteVersionLabel,
+            'update_changelog' => $updateChangelog,
         ];
     }
 

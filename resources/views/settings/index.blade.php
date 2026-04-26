@@ -16,7 +16,7 @@
                         </div>
                         <div>
                             <h2 class="h5 fw-semibold text-dark mb-1">Основные</h2>
-                            <p class="small text-muted mb-0">Название сайта, техобслуживание, обновления кода</p>
+                            <p class="small text-muted mb-0">Название сайта, техобслуживание, проверка обновлений</p>
                         </div>
                     </div>
                 </div>

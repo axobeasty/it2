@@ -40,7 +40,7 @@ class PageAccess
         'orders_admin' => 'Управление заявками',
         'inventory_my' => 'Мой инвентарь',
         'inventory_admin' => 'Управление инвентарем',
-        'employees_manage' => 'Управление пользователями',
+        'employees_manage' => 'Пользователи',
         'roles_manage' => 'Управление ролями',
         'groups_manage' => 'Управление группами',
         'faculties_manage' => 'Образование: факультеты',

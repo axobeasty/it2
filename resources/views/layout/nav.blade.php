@@ -106,12 +106,12 @@
                 <li class="nav-item dropdown"
                     onmouseenter="showDropdown(this)"
                     onmouseleave="hideDropdown(this)">
-                    <a class="nav-link nav-link-custom dropdown-toggle px-3 py-2 rounded-3" href="#" role="button" title="Сотрудники">
-                        <i class="bi bi-people me-2 opacity-75"></i><span class="nav-text">Сотрудники</span>
+                    <a class="nav-link nav-link-custom dropdown-toggle px-3 py-2 rounded-3" href="#" role="button" title="Пользователи">
+                        <i class="bi bi-people me-2 opacity-75"></i><span class="nav-text">Пользователи</span>
                     </a>
                     <ul class="dropdown-menu border-0 shadow-sm rounded-3 py-2">
                         @if($canEmployees)
-                            <li><a class="dropdown-item rounded-2 mx-1" href="/employees" title="Управление пользователями"><i class="bi bi-people-fill me-2 text-primary"></i><span class="dropdown-item-label">Управление пользователями</span></a></li>
+                            <li><a class="dropdown-item rounded-2 mx-1" href="/employees" title="Пользователи"><i class="bi bi-people-fill me-2 text-primary"></i><span class="dropdown-item-label">Пользователи</span></a></li>
                         @endif
                         @if($canRoles)
                             <li><a class="dropdown-item rounded-2 mx-1" href="/roles" title="Управление ролями"><i class="bi bi-person-fill-gear me-2 text-primary"></i><span class="dropdown-item-label">Управление ролями</span></a></li>

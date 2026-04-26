@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
 use App\Models\Groups;
+use App\Models\Notifs;
 use App\Models\Settings;
 use App\Models\Test;
 use App\Models\TestAttempt;
@@ -13,6 +15,7 @@ use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class StudentTestingController extends Controller
 {
@@ -108,7 +111,7 @@ class StudentTestingController extends Controller
         $percentage = $maxScore > 0 ? round(($score / $maxScore) * 100, 2) : 0;
         $grade = TestGrading::fromPercentage((float) $percentage);
 
-        TestAttempt::create([
+        $attempt = TestAttempt::create([
             'test_id' => $test->id,
             'student_id' => $user->id,
             'group_id' => $user->group_id,
@@ -121,6 +124,8 @@ class StudentTestingController extends Controller
             'submitted_at' => now(),
             'answers_json' => json_encode($answers, JSON_UNESCAPED_UNICODE),
         ]);
+
+        $this->notifyStaffAboutGroupTestSubmission($user, $test, $attempt);
 
         $isAutoSubmitted = $request->boolean('auto_submitted');
         $messagePrefix = $isAutoSubmitted ? 'Время вышло. Тест отправлен автоматически.' : 'Тест отправлен.';
@@ -660,6 +665,45 @@ class StudentTestingController extends Controller
         }
 
         return '—';
+    }
+
+    /**
+     * Уведомления на главной для сотрудников с правами администрирования / статистики тестов.
+     */
+    private function notifyStaffAboutGroupTestSubmission($student, Test $test, TestAttempt $attempt): void
+    {
+        $groupName = Groups::find($student->group_id)?->name ?? 'без группы';
+        $gradeLabel = TestGrading::labelRu((string) $attempt->grade);
+        $title = 'Тест группы сдан';
+        $message = sprintf(
+            '%s (гр. «%s») завершил тест «%s»: %s/%s балл., %s%%, оц. %s (%s).',
+            $student->fio,
+            $groupName,
+            $test->title,
+            (string) $attempt->score,
+            (string) $attempt->max_score,
+            (string) $attempt->percentage,
+            (string) $attempt->grade,
+            $gradeLabel
+        );
+        $message = Str::limit($message, 250);
+
+        $recipientIds = Employee::query()
+            ->whereHas('role.pagePermissions', function ($q) {
+                $q->whereIn('page_key', ['tests_admin', 'tests_stats']);
+            })
+            ->where('id', '!=', (int) $student->id)
+            ->pluck('id')
+            ->unique()
+            ->all();
+
+        foreach ($recipientIds as $employeeId) {
+            Notifs::create([
+                'title' => $title,
+                'message' => $message,
+                'employee_id' => $employeeId,
+            ]);
+        }
     }
 
     private function canStartAttempt(int $testId, int $studentId, $attemptsLimit): bool

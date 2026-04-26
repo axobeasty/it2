@@ -371,14 +371,14 @@
         @if($canEmployees || $canRoles || $canGroups)
             <div class="mb-4">
                 <h6 class="sidebar-section-title" data-section-icon="bi bi-people">
-                    Сотрудники
+                    Пользователи
                 </h6>
                 <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canEmployees)
                     <li>
-                        <a href="/employees" title="Управление пользователями" class="nav-link sidebar-link d-flex align-items-center">
+                        <a href="/employees" title="Пользователи" class="nav-link sidebar-link d-flex align-items-center">
                             <i class="bi bi-people-fill me-2 text-primary"></i>
-                            <span class="fw-medium sidebar-link-text">Управление пользователями</span>
+                            <span class="fw-medium sidebar-link-text">Пользователи</span>
                         </a>
                     </li>
                     @endif

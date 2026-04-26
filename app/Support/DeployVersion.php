@@ -73,6 +73,63 @@ final class DeployVersion
     }
 
     /**
+     * Версия релиза: .env → VERSION → deploy.json → composer.json → git describe / короткий SHA.
+     *
+     * @return array{version: ?string, source: 'env'|'version_file'|'deploy_json'|'composer'|'git_describe'|'git_head'|null}
+     */
+    public static function resolveReleaseVersion(string $basePath): array
+    {
+        $fromConfig = config('app.release_version');
+        if (is_string($fromConfig) && trim($fromConfig) !== '') {
+            return ['version' => trim($fromConfig), 'source' => 'env'];
+        }
+
+        $versionFile = $basePath.DIRECTORY_SEPARATOR.'VERSION';
+        if (is_readable($versionFile)) {
+            $line = @file($versionFile, FILE_IGNORE_NEW_LINES);
+            $raw = is_array($line) && isset($line[0]) ? trim((string) $line[0]) : '';
+            if ($raw !== '') {
+                return ['version' => $raw, 'source' => 'version_file'];
+            }
+        }
+
+        $data = self::readDeployJson();
+        if (is_array($data)) {
+            $rel = $data['release'] ?? null;
+            if (is_string($rel) && trim($rel) !== '') {
+                return ['version' => trim($rel), 'source' => 'deploy_json'];
+            }
+        }
+
+        if (self::isGitWorkingTree($basePath)) {
+            $desc = self::gitDescribe($basePath, 'HEAD');
+            if (is_string($desc) && $desc !== '') {
+                return ['version' => $desc, 'source' => 'git_describe'];
+            }
+            $head = self::gitHeadSha($basePath);
+            if (is_string($head) && $head !== '') {
+                return ['version' => substr($head, 0, 7), 'source' => 'git_head'];
+            }
+        }
+
+        $composerPath = $basePath.DIRECTORY_SEPARATOR.'composer.json';
+        if (is_readable($composerPath)) {
+            $rawComposer = @file_get_contents($composerPath);
+            if (is_string($rawComposer) && $rawComposer !== '') {
+                $decoded = json_decode($rawComposer, true);
+                if (is_array($decoded)) {
+                    $cv = $decoded['version'] ?? null;
+                    if (is_string($cv) && trim($cv) !== '') {
+                        return ['version' => trim($cv), 'source' => 'composer'];
+                    }
+                }
+            }
+        }
+
+        return ['version' => null, 'source' => null];
+    }
+
+    /**
      * @throws \JsonException
      */
     public static function writeDeployJson(string $ref): void
@@ -96,10 +153,14 @@ final class DeployVersion
             throw new \RuntimeException('Файл deploy.json есть, но PHP не может его перезаписать (права на файл).');
         }
 
+        $existing = self::readDeployJson();
         $payload = [
             'ref' => $ref,
             'updated_at' => gmdate('c'),
         ];
+        if (is_array($existing) && isset($existing['release']) && is_string($existing['release']) && trim($existing['release']) !== '') {
+            $payload['release'] = trim($existing['release']);
+        }
 
         $json = json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 
@@ -138,6 +199,22 @@ final class DeployVersion
     {
         try {
             $process = new Process(['git', 'rev-parse', 'HEAD'], $basePath, null, null, 20);
+            $process->run();
+            if (! $process->isSuccessful()) {
+                return null;
+            }
+            $out = trim($process->getOutput());
+
+            return $out !== '' ? $out : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private static function gitDescribe(string $basePath, string $rev): ?string
+    {
+        try {
+            $process = new Process(['git', 'describe', '--tags', '--always', $rev], $basePath, null, null, 20);
             $process->run();
             if (! $process->isSuccessful()) {
                 return null;

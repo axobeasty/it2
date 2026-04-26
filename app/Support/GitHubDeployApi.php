@@ -64,12 +64,49 @@ final class GitHubDeployApi
             return null;
         }
 
+        $commits = $response->json('commits');
+        $subjects = [];
+        if (is_array($commits)) {
+            foreach (array_slice($commits, 0, 50) as $c) {
+                $msg = $c['commit']['message'] ?? '';
+                if (! is_string($msg)) {
+                    continue;
+                }
+                $parts = preg_split("/\r\n|\r|\n/", $msg, 2);
+                $line = trim((string) ($parts[0] ?? ''));
+                if ($line !== '') {
+                    $subjects[] = $line;
+                }
+            }
+        }
+
         return [
             'status' => (string) $response->json('status', ''),
             'ahead_by' => (int) $response->json('ahead_by', 0),
             'behind_by' => (int) $response->json('behind_by', 0),
             'html_url' => $response->json('html_url'),
+            'commit_subjects' => $subjects,
         ];
+    }
+
+    /**
+     * Первая строка файла VERSION на ветке (публичный raw GitHub).
+     */
+    public static function rawVersionFile(string $owner, string $repo, string $branch): ?string
+    {
+        $url = 'https://raw.githubusercontent.com/'
+            .rawurlencode($owner).'/'.rawurlencode($repo).'/'.rawurlencode($branch).'/VERSION';
+        $response = Http::timeout(10)
+            ->withHeaders(['Accept' => 'text/plain'])
+            ->get($url);
+        if (! $response->successful()) {
+            return null;
+        }
+        $body = trim($response->body());
+        $line = strtok($body, "\r\n") ?: '';
+        $line = trim((string) $line);
+
+        return $line !== '' ? $line : null;
     }
 
     private static function request(string $url, ?string $token): \Illuminate\Http\Client\Response

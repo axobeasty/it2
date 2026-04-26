@@ -17,9 +17,33 @@
         .role-perms-section .card-header {
             background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
         }
-        .modal-perms-body {
-            max-height: min(70vh, 36rem);
+        /* Модалки прав роли: на весь экран, скролл только у тела формы */
+        .role-perms-fullscreen-modal .modal-dialog.modal-fullscreen {
+            height: 100%;
+        }
+        .role-perms-fullscreen-modal .modal-content {
+            height: 100%;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .role-perms-fullscreen-modal .modal-header {
+            flex-shrink: 0;
+        }
+        .role-perms-fullscreen-modal .role-perms-form {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .role-perms-fullscreen-modal .role-perms-modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .role-perms-fullscreen-modal .modal-footer {
+            flex-shrink: 0;
         }
         .roles-toolbar .form-control {
             max-width: 18rem;
@@ -46,16 +70,16 @@
             position: relative;
             z-index: 1;
             pointer-events: none;
-            min-height: 3rem;
+            min-height: 2.75rem;
             transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-            border-color: #e2e8f0 !important;
-            background-color: #f8fafc;
-            color: #64748b;
+            border-color: #94a3b8 !important;
+            background-color: #fff;
+            color: #334155;
             box-sizing: border-box;
         }
         .perm-toggle__face:hover {
-            border-color: #cbd5e1 !important;
-            background-color: #f1f5f9;
+            border-color: #64748b !important;
+            background-color: #f8fafc;
         }
         .perm-toggle__input:focus-visible + .perm-toggle__face {
             outline: 2px solid rgba(13, 110, 253, 0.45);
@@ -65,14 +89,17 @@
             outline: none;
         }
         .perm-toggle__input:checked + .perm-toggle__face {
-            background-color: #0d6efd;
+            background-color: #f4f9ff;
             border-color: #0d6efd !important;
-            color: #fff;
-            box-shadow: 0 2px 10px rgba(13, 110, 253, 0.28);
+            color: #0f172a;
+            box-shadow: inset 0 0 0 1px rgba(13, 110, 253, 0.12);
         }
         .perm-toggle__input:checked + .perm-toggle__face:hover {
-            background-color: #0b5ed7;
+            background-color: #e8f2ff;
             border-color: #0b5ed7 !important;
+        }
+        .perm-toggle__input:checked + .perm-toggle__face .perm-toggle__text {
+            font-weight: 600;
         }
         .perm-toggle__icon {
             width: 1.35rem;
@@ -88,9 +115,9 @@
             color: transparent;
         }
         .perm-toggle__input:checked + .perm-toggle__face .perm-toggle__icon {
-            border: 0;
-            background: rgba(255, 255, 255, 0.25);
-            color: #fff;
+            border: 2px solid #0d6efd;
+            background: rgba(13, 110, 253, 0.1);
+            color: #0d6efd;
         }
         .roles-empty-hint {
             border: 1px dashed rgba(15, 23, 42, 0.12);
@@ -170,7 +197,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
             <div>
                 <h4 class="mb-0">Управление ролями</h4>
-                <p class="text-muted small mb-0 mt-1">Нажмите на карточку роли, чтобы открыть настройки. Права включаются и выключаются кнопками внутри окна.</p>
+                <p class="text-muted small mb-0 mt-1">Нажмите на карточку роли, чтобы открыть настройки. В окне права переключаются по клику: серая обводка — выкл., синяя — вкл.</p>
             </div>
             <div class="d-flex flex-wrap align-items-center gap-2 roles-toolbar">
                 <div class="input-group input-group-sm">
@@ -242,34 +269,36 @@
 </div>
 
 @foreach($roles as $role)
-    <div class="modal fade" id="editRole{{ $role->id }}" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Редактирование: {{ $role->name }}</h5>
+    <div class="modal fade role-perms-fullscreen-modal" id="editRole{{ $role->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen m-0">
+            <div class="modal-content rounded-0 border-0">
+                <div class="modal-header py-3 shadow-sm">
+                    <h2 class="modal-title fs-5 mb-0">Редактирование: {{ $role->name }}</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
-                <form action="/roles/{{ $role->id }}/edit" method="post">
+                <form class="role-perms-form" action="/roles/{{ $role->id }}/edit" method="post">
                     @csrf
-                    <div class="modal-body modal-perms-body">
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Название роли</label>
-                            @if($role->is_system)
-                                <input type="text" class="form-control bg-light" value="{{ $role->name }}" readonly aria-readonly="true">
-                                <div class="form-text">Название системной роли нельзя изменить.</div>
-                            @else
-                                <input type="text" name="name" class="form-control" value="{{ $role->name }}" required>
-                            @endif
+                    <div class="modal-body role-perms-modal-body py-3 px-3 px-md-4">
+                        <div class="container-fluid" style="max-width: 1400px;">
+                            <div class="mb-3">
+                                <label class="form-label fw-semibold">Название роли</label>
+                                @if($role->is_system)
+                                    <input type="text" class="form-control bg-light" value="{{ $role->name }}" readonly aria-readonly="true">
+                                    <div class="form-text">Название системной роли нельзя изменить.</div>
+                                @else
+                                    <input type="text" name="name" class="form-control" value="{{ $role->name }}" required>
+                                @endif
+                            </div>
+                            <label class="form-label fw-semibold d-block mb-2">Доступ к разделам</label>
+                            <p class="text-muted small mb-3">Серая рамка — доступ выключен, синяя — включён. Нажмите строку, чтобы переключить.</p>
+                            @include('Employees.partials.role_permissions_form', [
+                                'groupedPages' => $groupedPages,
+                                'idPrefix' => 'r'.$role->id,
+                                'editableRole' => $role,
+                            ])
                         </div>
-                        <label class="form-label fw-semibold d-block mb-2">Доступ к разделам</label>
-                        <p class="text-muted small mb-3">Серый блок — доступ выключен. Синий — включён. Нажмите, чтобы переключить.</p>
-                        @include('Employees.partials.role_permissions_form', [
-                            'groupedPages' => $groupedPages,
-                            'idPrefix' => 'r'.$role->id,
-                            'editableRole' => $role,
-                        ])
                     </div>
-                    <div class="modal-footer">
+                    <div class="modal-footer py-3 border-top bg-light">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
                         <button type="submit" class="btn btn-primary">Сохранить</button>
                     </div>
@@ -279,29 +308,31 @@
     </div>
 @endforeach
 
-<div class="modal fade" id="createRoleModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Новая кастомная роль</h5>
+<div class="modal fade role-perms-fullscreen-modal" id="createRoleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen m-0">
+        <div class="modal-content rounded-0 border-0">
+            <div class="modal-header py-3 shadow-sm">
+                <h2 class="modal-title fs-5 mb-0">Новая кастомная роль</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
             </div>
-            <form action="/roles/create" method="post">
+            <form class="role-perms-form" action="/roles/create" method="post">
                 @csrf
-                <div class="modal-body modal-perms-body">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Название роли</label>
-                        <input type="text" name="name" class="form-control" required placeholder="Например, Куратор группы">
+                <div class="modal-body role-perms-modal-body py-3 px-3 px-md-4">
+                    <div class="container-fluid" style="max-width: 1400px;">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Название роли</label>
+                            <input type="text" name="name" class="form-control" required placeholder="Например, Куратор группы">
+                        </div>
+                        <label class="form-label fw-semibold d-block mb-2">Доступ к разделам</label>
+                        <p class="text-muted small mb-3">Серая рамка — доступ выключен, синяя — включён. Нажмите строку, чтобы переключить.</p>
+                        @include('Employees.partials.role_permissions_form', [
+                            'groupedPages' => $groupedPages,
+                            'idPrefix' => 'create',
+                            'editableRole' => null,
+                        ])
                     </div>
-                    <label class="form-label fw-semibold d-block mb-2">Доступ к разделам</label>
-                    <p class="text-muted small mb-3">Серый блок — доступ выключен. Синий — включён. Нажмите, чтобы переключить.</p>
-                    @include('Employees.partials.role_permissions_form', [
-                        'groupedPages' => $groupedPages,
-                        'idPrefix' => 'create',
-                        'editableRole' => null,
-                    ])
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer py-3 border-top bg-light">
                     <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button>
                     <button type="submit" class="btn btn-primary">Создать роль</button>
                 </div>

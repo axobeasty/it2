@@ -3,7 +3,7 @@
 @section('page_title', 'Основные настройки — ' . $settings->title)
 
 @section('settings_heading', 'Основные настройки')
-@section('settings_subheading', 'Параметры сайта, режим обслуживания и обновления кода.')
+@section('settings_subheading', 'Параметры сайта, режим обслуживания и проверка обновлений.')
 
 @section('settings_content')
             <form action="/settings/save" method="post" class="mb-2">
@@ -48,27 +48,37 @@
 
             @php
                 $deployResolved = \App\Support\DeployVersion::resolveLocalRef(base_path());
+                $deploySource = $deployResolved['source'] ?? 'none';
+                $showManualDeployRef = in_array($deploySource, ['deploy_json', 'none'], true);
+                $releaseResolved = \App\Support\DeployVersion::resolveReleaseVersion(base_path());
+                $releaseVersion = $releaseResolved['version'] ?? null;
+                $releaseSourceLabel = match ($releaseResolved['source'] ?? null) {
+                    'env' => '.env',
+                    'version_file' => 'VERSION',
+                    'deploy_json' => 'deploy.json',
+                    'composer' => 'composer.json',
+                    'git_describe' => 'git',
+                    'git_head' => 'git',
+                    default => null,
+                };
             @endphp
-            <div class="settings-section-title">Обновления кода</div>
-            <p class="text-muted small mb-3">
-                Проверка относительно GitHub и при наличии <code>.git</code> — загрузка через <code>git pull</code>.
-            </p>
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div class="settings-section-title">Проверить наличие обновлений</div>
+            <div class="d-flex flex-wrap align-items-baseline gap-2 gap-md-3 mb-3">
+                <div class="small">
+                    <span class="text-muted">Текущая версия:</span>
+                    <span id="deploy-version-ref"
+                        class="user-select-all @if ($releaseVersion === null) text-muted @endif">{{ $releaseVersion ?? '—' }}</span>
+                    <span id="deploy-release-source"
+                        class="@if ($releaseSourceLabel) text-muted small ms-1 @else d-none @endif">@if ($releaseSourceLabel)({{ $releaseSourceLabel }})@endif</span>
+                </div>
                 <button type="button" class="btn btn-outline-primary rounded-pill" id="btn-git-check-and-pull">
-                    <i class="bi bi-cloud-download me-1"></i> Проверить обновления
+                    <i class="bi bi-arrow-repeat me-1"></i> Проверить наличие обновлений
                 </button>
             </div>
-            @if ($deployResolved['source'] === 'env')
-                <div class="alert alert-info rounded-3 small mb-3 py-3">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Используется <code>DEPLOY_GIT_REF</code> в <code>.env</code>:
-                    <code class="user-select-all">{{ $deployResolved['ref'] }}</code>.
-                    Файл <code>deploy.json</code> из панели не используется, пока задана эта переменная.
-                </div>
-            @else
+            @if ($showManualDeployRef)
                 <div class="row g-2 align-items-end mb-3">
                     <div class="col-12 col-md-7 col-lg-6">
-                        <label for="deploy-ref-input" class="form-label small fw-semibold mb-1">Commit на сервере (SHA после выкладки)</label>
+                        <label for="deploy-ref-input" class="form-label small fw-semibold mb-1">SHA коммита</label>
                         <input type="text" class="form-control font-monospace rounded-3" id="deploy-ref-input"
                             value="{{ $deployResolved['ref'] ?? '' }}"
                             placeholder="например aab3eed"
@@ -76,22 +86,28 @@
                             maxlength="40">
                     </div>
                     <div class="col-auto">
-                        <button type="button" class="btn btn-outline-secondary rounded-pill" id="btn-deploy-ref-save" title="Пишет storage/app/deploy.json">
-                            <i class="bi bi-bookmark-plus me-1"></i> Сохранить метку
+                        <button type="button" class="btn btn-outline-secondary rounded-pill" id="btn-deploy-ref-save" title="storage/app/deploy.json">
+                            <i class="bi bi-bookmark-plus me-1"></i> Сохранить
                         </button>
                     </div>
                 </div>
             @endif
-            <p class="small text-muted mb-0" id="git-update-status">
-                Без <code>.git</code> укажите SHA залитого коммита; при совпадении с веткой метка в <code>deploy.json</code> обновится автоматически.
-                После <code>git pull</code> метка тоже синхронизируется (если нет только <code>DEPLOY_GIT_REF</code> в <code>.env</code>).
-            </p>
+            <div id="deploy-update-available" class="d-none border rounded-3 p-3 bg-body-secondary bg-opacity-50 small mb-3">
+                <div class="fw-semibold mb-2">Доступно обновление</div>
+                <div class="mb-2">
+                    <span class="text-muted">Версия после обновления:</span>
+                    <span id="deploy-remote-version" class="fw-medium user-select-all"></span>
+                </div>
+                <div class="text-muted mb-1">Что изменилось</div>
+                <ul id="deploy-changelog-list" class="mb-0 ps-3 text-body"></ul>
+            </div>
+            <p class="small mb-0" id="git-update-status"></p>
 
             <div class="modal fade" id="deploy-update-modal" tabindex="-1" aria-labelledby="deploy-update-modal-title" aria-hidden="true">
                 <div class="modal-dialog modal-lg modal-dialog-centered">
                     <div class="modal-content rounded-4 border-0 shadow">
                         <div class="modal-header border-0 pb-0">
-                            <h2 class="modal-title fs-5 fw-semibold" id="deploy-update-modal-title">Обновление кода</h2>
+                            <h2 class="modal-title fs-5 fw-semibold" id="deploy-update-modal-title">Проверить наличие обновлений</h2>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть" id="deploy-modal-dismiss-x"></button>
                         </div>
                         <div class="modal-body pt-2">
@@ -136,6 +152,8 @@
     const saveRefBtn = document.getElementById('btn-deploy-ref-save');
     const deployRefInput = document.getElementById('deploy-ref-input');
     const statusBox = document.getElementById('git-update-status');
+    const versionRefEl = document.getElementById('deploy-version-ref');
+    const releaseSourceEl = document.getElementById('deploy-release-source');
     const csrf = '{{ csrf_token() }}';
     const modalEl = document.getElementById('deploy-update-modal');
     const consoleEl = document.getElementById('deploy-console');
@@ -155,6 +173,39 @@
     function setStatus(message, isError) {
         statusBox.className = isError ? 'small text-danger mb-0' : 'small text-muted mb-0';
         statusBox.textContent = message;
+    }
+
+    var releaseSourceLabels = {
+        env: '.env',
+        version_file: 'VERSION',
+        deploy_json: 'deploy.json',
+        composer: 'composer.json',
+        git_describe: 'git',
+        git_head: 'git',
+    };
+
+    function setDisplayedRelease(version, source) {
+        if (versionRefEl) {
+            var v = version === undefined || version === null ? '' : String(version).trim();
+            if (v !== '') {
+                versionRefEl.textContent = v;
+                versionRefEl.classList.remove('text-muted');
+            } else {
+                versionRefEl.textContent = '—';
+                versionRefEl.classList.add('text-muted');
+            }
+        }
+        if (!releaseSourceEl) {
+            return;
+        }
+        var label = source && releaseSourceLabels[source] ? releaseSourceLabels[source] : null;
+        if (label) {
+            releaseSourceEl.textContent = '(' + label + ')';
+            releaseSourceEl.className = 'text-muted small ms-1';
+        } else {
+            releaseSourceEl.textContent = '';
+            releaseSourceEl.className = 'd-none';
+        }
     }
 
     function clearConsole() {
@@ -257,6 +308,104 @@
         return payload;
     }
 
+    var iconCheck = '<i class="bi bi-arrow-repeat me-1"></i>';
+    var iconPull = '<i class="bi bi-download me-1"></i>';
+    let lastDeployCheck = null;
+
+    function applyDeployCheckToButton(check) {
+        if (!button || !check) {
+            return;
+        }
+        lastDeployCheck = check;
+        button.classList.remove('btn-primary', 'btn-success', 'btn-outline-primary', 'btn-outline-warning', 'btn-warning');
+        var hu = check.has_updates;
+        if (hu === null || hu === undefined) {
+            button.classList.add('btn-outline-warning');
+            button.innerHTML = iconCheck + 'Проверить наличие обновлений';
+            return;
+        }
+        if (hu === true && check.can_pull) {
+            button.classList.add('btn-success');
+            button.innerHTML = iconPull + 'Обновить';
+            return;
+        }
+        if (hu === true && !check.can_pull) {
+            button.classList.add('btn-outline-warning');
+            button.innerHTML = iconCheck + 'Проверить наличие обновлений';
+            return;
+        }
+        button.classList.add('btn-outline-primary');
+        button.innerHTML = iconCheck + 'Проверить наличие обновлений';
+    }
+
+    function applyUpdatePreview(check) {
+        var box = document.getElementById('deploy-update-available');
+        if (!box) {
+            return;
+        }
+        if (check && check.has_updates === true) {
+            box.classList.remove('d-none');
+            var rv = document.getElementById('deploy-remote-version');
+            if (rv) {
+                rv.textContent = check.remote_version_label || check.remote_short || '—';
+            }
+            var ul = document.getElementById('deploy-changelog-list');
+            if (ul) {
+                ul.innerHTML = '';
+                var items = check.update_changelog || [];
+                if (!items.length) {
+                    var li0 = document.createElement('li');
+                    li0.className = 'text-muted fst-italic';
+                    li0.textContent = 'Список изменений недоступен.';
+                    ul.appendChild(li0);
+                } else {
+                    items.forEach(function (line) {
+                        var li = document.createElement('li');
+                        li.textContent = line;
+                        ul.appendChild(li);
+                    });
+                }
+            }
+        } else {
+            box.classList.add('d-none');
+        }
+    }
+
+    async function fetchDeployCheck() {
+        return await postJson('/settings/git/check-updates');
+    }
+
+    async function runDeployCheckPreview(options) {
+        var opts = options || {};
+        if (!button) {
+            return null;
+        }
+        try {
+            const check = await fetchDeployCheck();
+            applyDeployCheckToButton(check);
+            applyUpdatePreview(check);
+            if (Object.prototype.hasOwnProperty.call(check, 'app_release')) {
+                setDisplayedRelease(check.app_release, check.app_release_source);
+            }
+            if (opts.fillStatus !== false) {
+                if (check.has_updates === true) {
+                    if (check.can_pull) {
+                        setStatus('Доступно обновление.', false);
+                    } else {
+                        setStatus('Есть обновления на GitHub — на сервере без git, выкладка вручную.', false);
+                    }
+                } else if (check.has_updates === null || check.has_updates === undefined) {
+                    setStatus(check.message || 'Укажите метку деплоя (SHA).', false);
+                } else {
+                    setStatus('', false);
+                }
+            }
+            return check;
+        } catch (_e) {
+            return null;
+        }
+    }
+
     if (saveRefBtn && deployRefInput) {
         saveRefBtn.addEventListener('click', async function () {
             const raw = (deployRefInput.value || '').trim();
@@ -274,14 +423,21 @@
                 if (res.ref) {
                     deployRefInput.value = res.ref;
                 }
+                await runDeployCheckPreview({ fillStatus: false });
                 toastr.success(res.message || 'Метка сохранена.');
-                setStatus(res.message || 'Метка версии сохранена. Можно нажать «Проверить обновления».', false);
+                setStatus(res.message || 'Метка сохранена.', false);
             } catch (e) {
                 toastr.error(e.message || 'Не удалось сохранить.');
             } finally {
                 saveRefBtn.disabled = false;
             }
         });
+    }
+
+    if (button) {
+        setTimeout(function () {
+            runDeployCheckPreview();
+        }, 0);
     }
 
     if (!button) {
@@ -299,7 +455,7 @@
         try {
             logLine('Запрос: POST /settings/git/check-updates');
             setProgress(22, { striped: true });
-            const check = await postJson('/settings/git/check-updates');
+            const check = await fetchDeployCheck();
             setProgress(48, { striped: true });
 
             logLine('Ответ получен.');
@@ -324,12 +480,17 @@
             if (check.deploy_ref_saved && check.local_ref && deployRefInput) {
                 deployRefInput.value = check.local_ref;
             }
+            if (Object.prototype.hasOwnProperty.call(check, 'app_release')) {
+                setDisplayedRelease(check.app_release, check.app_release_source);
+            }
+            applyDeployCheckToButton(check);
+            applyUpdatePreview(check);
 
             if (check.has_updates === null || check.has_updates === undefined) {
                 setProgress(100, { variant: 'bg-warning' });
                 setStatus(check.message || 'Укажите версию на сервере (deploy.json или DEPLOY_GIT_REF).', false);
                 toastr.warning(check.message || 'Нужна метка версии на сервере.');
-                logLine('Укажите commit на странице (поле «Commit на сервере») и нажмите «Сохранить метку», затем снова «Проверить обновления».');
+                logLine('Укажите SHA на странице и нажмите «Сохранить», затем снова «Проверить наличие обновлений».');
                 if (check.remote_short && deployRefInput && !deployRefInput.value.trim()) {
                     deployRefInput.placeholder = 'например ' + check.remote_short;
                 }
@@ -393,6 +554,9 @@
             if (pull.deploy_ref_saved && pull.current_ref && deployRefInput) {
                 deployRefInput.value = pull.current_ref;
             }
+            if (Object.prototype.hasOwnProperty.call(pull, 'app_release')) {
+                setDisplayedRelease(pull.app_release, pull.app_release_source);
+            }
             if (pull.output) {
                 logLine('Вывод git:');
                 String(pull.output).split(/\r?\n/).forEach(function (ln) {
@@ -402,6 +566,7 @@
                 });
             }
             logLine('Готово.');
+            await runDeployCheckPreview({ fillStatus: false });
             setStatus(pull.message || 'Обновления успешно скачаны и применены.', false);
             toastr.success(pull.message || 'Обновления успешно скачаны и применены.');
         } catch (error) {
