@@ -229,6 +229,17 @@ function installer_api_composer_phar(): array
 {
     $php = installer_php_binary();
     $root = INSTALLER_ROOT;
+    $pharPath = $root.DIRECTORY_SEPARATOR.'composer.phar';
+    if (is_file($pharPath)) {
+        return [
+            'ok' => true,
+            'steps' => [],
+            'log' => 'composer.phar уже найден в корне проекта — загрузка пропущена.',
+            'composer_phar' => true,
+            'skipped' => true,
+        ];
+    }
+
     $steps = [];
     $log = [];
 
@@ -304,9 +315,78 @@ function installer_api_composer_install(): array
     ];
 }
 
+function installer_api_ensure_composer_stack(): array
+{
+    $max = (int) ($_SESSION['installer_max_step'] ?? 1);
+    if ($max < 2) {
+        return [
+            'ok' => false,
+            'error' => 'step_gate',
+            'log' => 'Сначала на шаге 1 нажмите «Далее» и подтвердите проверку требований.',
+            'steps' => [],
+        ];
+    }
+
+    $logParts = [];
+    $allSteps = [];
+
+    if (is_file(INSTALLER_ROOT.'/vendor/autoload.php')) {
+        $_SESSION['installer_max_step'] = max($max, 3);
+
+        return [
+            'ok' => true,
+            'skipped' => true,
+            'log' => 'Каталог vendor/ уже найден — зависимости установлены, шаг пропущен.',
+            'steps' => [],
+            'vendor_ok' => true,
+            'max_step' => (int) $_SESSION['installer_max_step'],
+        ];
+    }
+
+    $phar = installer_api_composer_phar();
+    $logParts[] = $phar['log'] ?? '';
+    if (isset($phar['steps']) && is_array($phar['steps'])) {
+        $allSteps = array_merge($allSteps, $phar['steps']);
+    }
+    if (! $phar['ok']) {
+        return [
+            'ok' => false,
+            'log' => implode("\n\n", array_filter($logParts)),
+            'steps' => $allSteps,
+        ];
+    }
+
+    $inst = installer_api_composer_install();
+    $logParts[] = $inst['log'] ?? '';
+    if (isset($inst['steps']) && is_array($inst['steps'])) {
+        $allSteps = array_merge($allSteps, $inst['steps']);
+    }
+    if (! $inst['ok']) {
+        return [
+            'ok' => false,
+            'log' => implode("\n\n", array_filter($logParts)),
+            'steps' => $allSteps,
+        ];
+    }
+
+    $_SESSION['installer_max_step'] = 3;
+
+    return [
+        'ok' => true,
+        'log' => implode("\n\n", array_filter($logParts)),
+        'steps' => $allSteps,
+        'vendor_ok' => true,
+        'max_step' => 3,
+    ];
+}
+
 function installer_api_finalize(array $data): array
 {
     $dbConn = ($data['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite';
+
+    if ((int) ($_SESSION['installer_max_step'] ?? 1) < 3) {
+        return ['ok' => false, 'log' => 'Сначала завершите шаг 2 (Composer и зависимости).', 'steps' => []];
+    }
 
     if (($data['app_name'] ?? '') === '' || ($data['app_url'] ?? '') === '') {
         return ['ok' => false, 'log' => 'Укажите название приложения и URL.', 'steps' => []];
@@ -406,6 +486,35 @@ if (is_file(INSTALLER_LOCK)) {
 }
 
 // -------------------------------------------------------------------------
+// Разблокировка шагов (POST)
+// -------------------------------------------------------------------------
+
+$dirErrors = installer_ensure_directories();
+$req = installer_requirements();
+$_SESSION['installer_token'] = $_SESSION['installer_token'] ?? bin2hex(random_bytes(16));
+$_SESSION['installer_max_step'] = isset($_SESSION['installer_max_step'])
+    ? max(1, min(3, (int) $_SESSION['installer_max_step']))
+    : 1;
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['installer_unlock'])
+    && (string) $_POST['installer_unlock'] === 'step2'
+) {
+    if (! installer_api_verify_token()) {
+        header('Location: install.php?step=1', true, 302);
+        exit;
+    }
+    if ($req['core_ok'] && $dirErrors === []) {
+        $_SESSION['installer_max_step'] = max((int) $_SESSION['installer_max_step'], 2);
+        header('Location: install.php?step=2', true, 302);
+        exit;
+    }
+    header('Location: install.php?step=1', true, 302);
+    exit;
+}
+
+// -------------------------------------------------------------------------
 // API (JSON)
 // -------------------------------------------------------------------------
 
@@ -429,12 +538,37 @@ if (
     $action = (string) $_POST['api_action'];
 
     try {
+        if ($action === 'ensure_composer_stack') {
+            if ((int) ($_SESSION['installer_max_step'] ?? 1) < 2) {
+                http_response_code(403);
+                echo json_encode([
+                    'ok' => false,
+                    'error' => 'step_gate',
+                    'log' => 'Шаг 2 недоступен: завершите шаг 1.',
+                    'steps' => [],
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            $payload = installer_api_ensure_composer_stack();
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
         if ($action === 'composer_phar') {
+            if ((int) ($_SESSION['installer_max_step'] ?? 1) < 2) {
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'error' => 'step_gate', 'log' => 'Сначала шаг 1.', 'steps' => []], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
             $payload = installer_api_composer_phar();
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
         }
         if ($action === 'composer_install') {
+            if ((int) ($_SESSION['installer_max_step'] ?? 1) < 2) {
+                http_response_code(403);
+                echo json_encode(['ok' => false, 'error' => 'step_gate', 'log' => 'Сначала шаг 1.', 'steps' => []], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
             $payload = installer_api_composer_install();
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
@@ -472,22 +606,22 @@ if (
 // HTML UI
 // -------------------------------------------------------------------------
 
-$dirErrors = installer_ensure_directories();
-$req = installer_requirements();
-
-$_SESSION['installer_token'] = $_SESSION['installer_token'] ?? bin2hex(random_bytes(16));
 $token = $_SESSION['installer_token'];
+$maxStep = (int) $_SESSION['installer_max_step'];
 
 $step = isset($_GET['step']) ? (int) $_GET['step'] : 1;
 if ($step < 1 || $step > 3) {
     $step = 1;
+}
+if ($step > $maxStep) {
+    header('Location: install.php?step='.$maxStep, true, 302);
+    exit;
 }
 
 $bootstrapCss = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css';
 $bootstrapJs = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js';
 $iconsCss = 'https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css';
 
-$hasComposerPhar = is_file(INSTALLER_ROOT.'/composer.phar');
 $defaultUrl = ((isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') ? 'https' : 'http').'://'.($_SERVER['HTTP_HOST'] ?? 'localhost');
 
 header('Content-Type: text/html; charset=utf-8');
@@ -517,6 +651,10 @@ header('Content-Type: text/html; charset=utf-8');
         .profile-tab.active { background: #d9e1ef; font-weight: 600; }
         .profile-tab:not(.active):hover { background: #f8f9fa; color: #000; }
         .profile-tab:disabled { opacity: 0.45; pointer-events: none; }
+        .profile-tab.locked {
+            opacity: 0.45; cursor: not-allowed; pointer-events: none;
+            color: #6c757d !important; background: #f1f3f5 !important;
+        }
         .section-title {
             font-size: 1.15rem; font-weight: 600; color: #333; margin-bottom: 1rem;
             border-bottom: 2px solid #0d6efd; padding-bottom: 0.5rem; display: inline-block;
@@ -540,14 +678,22 @@ header('Content-Type: text/html; charset=utf-8');
     </style>
 </head>
 <body>
-<div class="installer-shell">
+<div class="installer-shell" id="installer-step-meta" data-step="<?= (int) $step ?>" data-max-step="<?= (int) $maxStep ?>" data-autorun="<?= ($step === 2 && $maxStep >= 2 && ! ($req['vendor_ok'] && $maxStep >= 3)) ? '1' : '0' ?>">
     <h1 class="header-title mb-1"><i class="bi bi-gear-wide-connected text-primary me-2"></i>Установка IT-Master</h1>
-    <p class="text-muted mb-4">Мастер поможет поставить Composer, зависимости, создать <code>.env</code> и подготовить базу.</p>
+    <p class="text-muted mb-4">Мастер поможет поставить Composer, зависимости, создать <code>.env</code> и подготовить базу. Шаги открываются по очереди.</p>
 
     <div class="profile-tabs" role="tablist">
         <a class="profile-tab <?= $step === 1 ? 'active' : '' ?>" href="?step=1">1. Проверка</a>
-        <a class="profile-tab <?= $step === 2 ? 'active' : '' ?>" href="?step=2" <?= ! $req['core_ok'] || $dirErrors !== [] ? 'tabindex="-1" style="opacity:.5;pointer-events:none"' : '' ?>>2. Composer</a>
-        <a class="profile-tab <?= $step === 3 ? 'active' : '' ?>" href="?step=3" <?= ! $req['core_ok'] || $dirErrors !== [] ? 'tabindex="-1" style="opacity:.5;pointer-events:none"' : '' ?>>3. Настройка</a>
+        <?php if ($maxStep >= 2): ?>
+            <a class="profile-tab <?= $step === 2 ? 'active' : '' ?>" href="?step=2">2. Composer</a>
+        <?php else: ?>
+            <span class="profile-tab locked" title="Сначала завершите шаг 1">2. Composer <i class="bi bi-lock-fill small"></i></span>
+        <?php endif; ?>
+        <?php if ($maxStep >= 3): ?>
+            <a class="profile-tab <?= $step === 3 ? 'active' : '' ?>" href="?step=3">3. Настройка</a>
+        <?php else: ?>
+            <span class="profile-tab locked" title="Сначала завершите шаг 2">3. Настройка <i class="bi bi-lock-fill small"></i></span>
+        <?php endif; ?>
     </div>
 
     <?php if ($dirErrors !== []): ?>
@@ -601,7 +747,11 @@ header('Content-Type: text/html; charset=utf-8');
             <?php endif; ?>
             <div class="mt-3">
                 <?php if ($req['core_ok'] && $dirErrors === []): ?>
-                    <a class="btn btn-gradient" href="?step=2">Далее: Composer <i class="bi bi-arrow-right ms-1"></i></a>
+                    <form method="post" action="install.php" class="d-inline">
+                        <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
+                        <input type="hidden" name="installer_unlock" value="step2">
+                        <button type="submit" class="btn btn-gradient">Далее: Composer <i class="bi bi-arrow-right ms-1"></i></button>
+                    </form>
                 <?php else: ?>
                     <button class="btn btn-gradient" type="button" disabled>Далее: Composer</button>
                 <?php endif; ?>
@@ -611,34 +761,34 @@ header('Content-Type: text/html; charset=utf-8');
 
     <?php if ($step === 2): ?>
         <div class="notification-panel">
-            <?php if (! $req['core_ok'] || $dirErrors !== []): ?>
-                <p class="text-danger">Сначала пройдите шаг 1.</p>
-                <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> Назад</a>
+            <?php if ($maxStep < 2 || ! $req['core_ok'] || $dirErrors !== []): ?>
+                <p class="text-danger">Шаг 2 недоступен. Вернитесь на шаг 1 и подтвердите проверку.</p>
+                <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> К шагу 1</a>
             <?php else: ?>
-                <div class="section-title">Composer</div>
-                <p class="text-muted small">Скачивание выполняется командами с официального сайта и проверкой SHA-384 (как в документации Composer).</p>
-                <p class="small mb-2">Ожидаемый хэш установщика зафиксирован в <code>install.php</code> (константа). Если установщик обновился на getcomposer.org, хэш нужно обновить вручную.</p>
-
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button type="button" class="btn btn-gradient" id="btn-composer-phar">
-                        <i class="bi bi-download me-1"></i> Скачать composer.phar
-                    </button>
-                    <button type="button" class="btn btn-outline-primary" id="btn-composer-install" <?= ! $hasComposerPhar ? 'disabled' : '' ?>>
-                        <i class="bi bi-box-seam me-1"></i> Установить зависимости (composer install)
-                    </button>
-                </div>
-
-                <p class="small mb-0">
-                    <?php if ($req['vendor_ok']): ?>
-                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Каталог <code>vendor/</code> найден — можно переходить к настройке.</span>
+                <div class="section-title">Composer и зависимости</div>
+                <p class="text-muted small mb-2">Если <code>composer.phar</code> или каталог <code>vendor/</code> отсутствуют, они будут загружены и установлены автоматически (скачивание с getcomposer.org с проверкой SHA-384).</p>
+                <p class="small text-muted mb-3" id="step2-status">
+                    <?php if ($req['vendor_ok'] && $maxStep >= 3): ?>
+                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Готово. Переходите к шагу 3.</span>
                     <?php else: ?>
-                        <span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i>После успешного <code>composer install</code> откроется шаг 3.</span>
+                        <span class="text-primary"><i class="bi bi-hourglass-split me-1"></i>Подготовка запускается автоматически…</span>
                     <?php endif; ?>
                 </p>
 
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-retry-stack" <?= ($req['vendor_ok'] && $maxStep >= 3) ? 'disabled' : '' ?>>
+                        <i class="bi bi-arrow-repeat me-1"></i> Повторить загрузку / composer install
+                    </button>
+                </div>
+                <p class="small text-muted mb-0">Хэш установщика Composer — в константе <code>COMPOSER_INSTALLER_SHA384</code> в <code>install.php</code>; при смене на getcomposer.org обновите его вручную.</p>
+
                 <div class="mt-3 d-flex flex-wrap gap-2">
                     <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> Назад</a>
-                    <a class="btn btn-gradient <?= $req['vendor_ok'] ? '' : 'disabled' ?>" href="<?= $req['vendor_ok'] ? '?step=3' : '#' ?>" id="link-step3" <?= $req['vendor_ok'] ? '' : 'aria-disabled="true" onclick="return false;"' ?>>Далее: настройка <i class="bi bi-arrow-right ms-1"></i></a>
+                    <?php if ($maxStep >= 3): ?>
+                        <a class="btn btn-gradient" href="?step=3">Далее: настройка <i class="bi bi-arrow-right ms-1"></i></a>
+                    <?php else: ?>
+                        <button type="button" class="btn btn-gradient" disabled id="link-step3-pending">Далее: настройка <i class="bi bi-lock ms-1"></i></button>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -646,9 +796,9 @@ header('Content-Type: text/html; charset=utf-8');
 
     <?php if ($step === 3): ?>
         <div class="notification-panel">
-            <?php if (! $req['vendor_ok'] || ! $req['core_ok'] || $dirErrors !== []): ?>
-                <p class="text-danger">Нужны выполненные шаги 1–2 и каталог <code>vendor/</code>.</p>
-                <a class="btn btn-secondary" href="?step=2">К Composer</a>
+            <?php if ($maxStep < 3 || ! $req['core_ok'] || $dirErrors !== [] || ! $req['vendor_ok']): ?>
+                <p class="text-danger">Шаг 3 доступен только после успешного шага 2 и наличия <code>vendor/</code>.</p>
+                <a class="btn btn-secondary" href="?step=2">К шагу 2</a>
             <?php else: ?>
                 <div class="section-title">Параметры приложения</div>
                 <form id="form-finalize" class="row g-3">
@@ -778,58 +928,55 @@ header('Content-Type: text/html; charset=utf-8');
         });
     }
 
-    var btnPhar = document.getElementById('btn-composer-phar');
-    if (btnPhar) {
-        btnPhar.addEventListener('click', function () {
-            btnPhar.disabled = true;
-            appendConsole('--- Скачивание composer.phar ---');
-            fakeProgressWhile(
-                postApi('composer_phar').then(function (data) {
-                    appendConsole(data.log || JSON.stringify(data));
-                    setProgress(100, data.ok ? 'Готово' : 'Ошибка');
-                    hideProgressStripes();
-                    if (data.ok) {
-                        var btnInst = document.getElementById('btn-composer-install');
-                        if (btnInst) btnInst.disabled = false;
-                    }
-                }).catch(function (e) {
-                    appendConsole('Ошибка сети: ' + e);
-                    setProgress(100, 'Ошибка');
-                    hideProgressStripes();
-                }),
-                'Загрузка и установка Composer…'
-            ).finally(function () { btnPhar.disabled = false; });
-        });
+    var stackRunning = false;
+    function runEnsureStack(isAuto) {
+        var meta = document.getElementById('installer-step-meta');
+        if (!meta || meta.dataset.step !== '2') return;
+        if (stackRunning) return;
+        stackRunning = true;
+        var retryBtn = document.getElementById('btn-retry-stack');
+        if (retryBtn) retryBtn.disabled = true;
+        if (!isAuto) {
+            appendConsole('\n--- Повтор: Composer + зависимости ---');
+        } else {
+            appendConsole('=== Автоматическая установка Composer и зависимостей ===');
+        }
+        fakeProgressWhile(
+            postApi('ensure_composer_stack').then(function (data) {
+                appendConsole(data.log || data.error || JSON.stringify(data));
+                setProgress(100, data.ok ? 'Готово' : 'Ошибка');
+                hideProgressStripes();
+                var st = document.getElementById('step2-status');
+                if (data.ok && data.vendor_ok) {
+                    if (st) st.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Готово. Переход к шагу 3…</span>';
+                    setTimeout(function () { window.location.assign('install.php?step=3'); }, 600);
+                } else {
+                    if (st) st.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Ошибка. Исправьте окружение и нажмите «Повторить».</span>';
+                    if (retryBtn) retryBtn.disabled = false;
+                }
+            }).catch(function (e) {
+                appendConsole('Ошибка: ' + e);
+                setProgress(100, 'Ошибка');
+                hideProgressStripes();
+                var st = document.getElementById('step2-status');
+                if (st) st.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Сбой запроса. Повторите.</span>';
+                if (retryBtn) retryBtn.disabled = false;
+            }),
+            'Скачивание Composer и composer install (долго при первом запуске)…',
+            92
+        ).finally(function () { stackRunning = false; });
     }
 
-    var btnCi = document.getElementById('btn-composer-install');
-    if (btnCi) {
-        btnCi.addEventListener('click', function () {
-            btnCi.disabled = true;
-            appendConsole('\n--- composer install ---');
-            fakeProgressWhile(
-                postApi('composer_install').then(function (data) {
-                    appendConsole(data.log || JSON.stringify(data));
-                    setProgress(100, data.ok ? 'Зависимости установлены' : 'Ошибка');
-                    hideProgressStripes();
-                    if (data.ok && data.vendor_ok) {
-                        var a = document.getElementById('link-step3');
-                        if (a) {
-                            a.classList.remove('disabled');
-                            a.setAttribute('href', '?step=3');
-                            a.removeAttribute('aria-disabled');
-                            a.onclick = null;
-                        }
-                    }
-                }).catch(function (e) {
-                    appendConsole('Ошибка: ' + e);
-                    setProgress(100, 'Ошибка');
-                    hideProgressStripes();
-                }),
-                'composer install (может занять несколько минут)…',
-                92
-            ).finally(function () { btnCi.disabled = false; });
-        });
+    (function () {
+        var meta = document.getElementById('installer-step-meta');
+        if (meta && meta.dataset.autorun === '1') {
+            runEnsureStack(true);
+        }
+    })();
+
+    var btnRetry = document.getElementById('btn-retry-stack');
+    if (btnRetry) {
+        btnRetry.addEventListener('click', function () { runEnsureStack(false); });
     }
 
     var dbSel = document.getElementById('db_connection');
