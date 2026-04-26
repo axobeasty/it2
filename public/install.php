@@ -476,7 +476,7 @@ if (is_file(INSTALLER_LOCK)) {
     echo '<!DOCTYPE html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
     echo '<title>Уже установлено</title>';
     echo '<link href="'.installer_h($bootstrapCss).'" rel="stylesheet"><link href="'.installer_h($iconsCss).'" rel="stylesheet">';
-    echo '<style>body{background:#f5f7fb;font-family:\'Segoe UI\',sans-serif;min-height:100vh}.panel{max-width:40rem;margin:2rem auto;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.06);padding:1.5rem}</style>';
+    echo '<style>html,body{height:100%;margin:0;overflow:hidden}body{background:#f5f7fb;font-family:\'Segoe UI\',sans-serif;display:flex;align-items:center;justify-content:center;padding:1rem}.panel{max-width:36rem;background:#fff;border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.06);padding:1.25rem}</style>';
     echo '</head><body class="p-3"><div class="panel">';
     echo '<h1 class="h4 mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Установка уже выполнена</h1>';
     echo '<p>Файл <code>storage/framework/installer.lock</code> найден. Откройте <a href="/">главную страницу</a>.</p>';
@@ -635,227 +635,433 @@ header('Content-Type: text/html; charset=utf-8');
     <link href="<?= installer_h($bootstrapCss) ?>" rel="stylesheet" crossorigin="anonymous">
     <link href="<?= installer_h($iconsCss) ?>" rel="stylesheet">
     <style>
-        body { background: #f5f7fb; font-family: 'Segoe UI', system-ui, sans-serif; min-height: 100vh; margin: 0; }
-        .installer-shell { max-width: 48rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-        .header-title { font-weight: 600; color: #000; font-size: 1.5rem; }
-        .notification-panel {
-            border-radius: 12px; background: #ffffff; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-            padding: 1.5rem; margin-bottom: 1rem;
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            box-sizing: border-box;
         }
-        .profile-tabs { display: flex; gap: 12px; background: white; border-radius: 12px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+        *, *::before, *::after { box-sizing: inherit; }
+        body {
+            background: #f5f7fb;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        .installer-shell {
+            flex: 1;
+            width: 100%;
+            max-width: 64rem;
+            margin: 0 auto;
+            padding: 0.4rem 0.65rem 0.5rem;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .installer-top {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .header-title {
+            font-weight: 600;
+            color: #000;
+            font-size: 1.05rem;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .installer-lead {
+            font-size: 0.68rem;
+            color: #6c757d;
+            margin: 0.15rem 0 0.35rem;
+            line-height: 1.25;
+            max-height: 2.5em;
+            overflow: hidden;
+        }
+        .profile-tabs {
+            display: flex;
+            gap: 6px;
+            background: white;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 0.35rem;
+            flex: 0 0 auto;
+        }
         .profile-tab {
-            flex: 1; text-align: center; padding: 10px 14px; border-radius: 10px; font-weight: 500; color: #000;
-            background: white; font-size: 0.92rem; min-width: 90px; border: none; text-decoration: none;
-            transition: all 0.3s ease;
+            flex: 1;
+            text-align: center;
+            padding: 6px 8px;
+            border-radius: 8px;
+            font-weight: 500;
+            color: #000;
+            background: transparent;
+            font-size: 0.78rem;
+            min-width: 0;
+            border: none;
+            text-decoration: none;
+            transition: background 0.2s ease;
         }
         .profile-tab.active { background: #d9e1ef; font-weight: 600; }
         .profile-tab:not(.active):hover { background: #f8f9fa; color: #000; }
         .profile-tab:disabled { opacity: 0.45; pointer-events: none; }
         .profile-tab.locked {
-            opacity: 0.45; cursor: not-allowed; pointer-events: none;
-            color: #6c757d !important; background: #f1f3f5 !important;
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+            color: #6c757d !important;
+            background: #f1f3f5 !important;
+        }
+        .installer-workspace {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr);
+            gap: 0.45rem;
+            overflow: hidden;
+        }
+        @media (max-width: 767.98px) {
+            .installer-workspace {
+                grid-template-columns: 1fr;
+                grid-template-rows: minmax(64px, 16dvh) minmax(0, 1fr);
+            }
+        }
+        .installer-console-card,
+        .installer-main-card {
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .installer-console-head {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: #495057;
+            padding: 0.35rem 0.5rem 0.2rem;
+            border-bottom: 1px solid #e9ecef;
+            flex: 0 0 auto;
+        }
+        .console-panel {
+            flex: 1;
+            min-height: 0;
+            background: #1e1e1e;
+            color: #c8c8c8;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 0.62rem;
+            line-height: 1.25;
+            padding: 0.35rem 0.45rem;
+            overflow: hidden;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .console-panel:empty::before {
+            content: 'Вывод команд…';
+            color: #6e6e6e;
+        }
+        .installer-main-inner {
+            flex: 1;
+            min-height: 0;
+            padding: 0.45rem 0.55rem;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            overflow-x: hidden;
+            gap: 0.35rem;
+        }
+        .notification-panel {
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            padding: 0;
+            margin: 0;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
         .section-title {
-            font-size: 1.15rem; font-weight: 600; color: #333; margin-bottom: 1rem;
-            border-bottom: 2px solid #0d6efd; padding-bottom: 0.5rem; display: inline-block;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #333;
+            margin: 0 0 0.3rem;
+            padding-bottom: 0.2rem;
+            border-bottom: 2px solid #0d6efd;
+            display: inline-block;
+            flex: 0 0 auto;
+        }
+        .step-body {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .step-body-scroll-fake {
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
         }
         .btn-gradient {
-            background: linear-gradient(135deg, #0d6efd, #0b5ed7); border: none; color: white !important;
-            padding: 8px 18px; transition: all 0.3s;
+            background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+            border: none;
+            color: white !important;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.8rem;
         }
-        .btn-gradient:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25); color: white !important; }
-        .btn-gradient:disabled { opacity: 0.55; transform: none; }
-        .console-panel {
-            background: #1e1e1e; color: #d4d4d4; font-family: Consolas, 'Courier New', monospace;
-            font-size: 0.8rem; border-radius: 10px; padding: 1rem; max-height: 320px; overflow: auto;
-            white-space: pre-wrap; word-break: break-word; min-height: 120px;
+        .btn-gradient:hover {
+            filter: brightness(1.05);
+            color: white !important;
         }
-        .console-panel:empty::before { content: 'Вывод команд появится здесь…'; color: #6e6e6e; }
-        .progress { height: 10px; border-radius: 8px; }
+        .btn-gradient:disabled { opacity: 0.55; }
+        .progress { height: 6px; border-radius: 6px; margin: 0; }
         .progress-bar { transition: width 0.35s ease; }
-        table.install-checks { font-size: 0.9rem; }
-        table.install-checks td { vertical-align: top; }
+        #global-progress-wrap {
+            flex: 0 0 auto;
+            margin: 0 !important;
+        }
+        table.install-checks {
+            font-size: 0.68rem;
+            margin-bottom: 0;
+            width: 100%;
+            table-layout: fixed;
+        }
+        table.install-checks td {
+            vertical-align: top;
+            padding: 0.2rem 0.35rem 0.2rem 0;
+            border-color: #eee;
+        }
+        table.install-checks td:first-child {
+            width: 42%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        table.install-checks .cell-detail {
+            font-size: 0.62rem;
+            line-height: 1.2;
+            max-height: 2.4em;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+        }
+        table.install-checks .badge { font-size: 0.6rem; font-weight: 600; }
+        .installer-actions {
+            flex: 0 0 auto;
+            margin-top: 0.35rem;
+            padding-top: 0.25rem;
+        }
+        .form-finalize-compact .form-label { font-size: 0.72rem; margin-bottom: 0.15rem; }
+        .form-finalize-compact .form-control,
+        .form-finalize-compact .form-select {
+            padding: 0.25rem 0.45rem;
+            font-size: 0.78rem;
+        }
+        .form-finalize-compact.row { --bs-gutter-y: 0.35rem; --bs-gutter-x: 0.35rem; }
+        .dir-errors-compact {
+            font-size: 0.72rem;
+            padding: 0.35rem 0.45rem;
+            margin: 0;
+            border-radius: 8px;
+        }
+        .dir-errors-compact ul { margin: 0; padding-left: 1rem; }
     </style>
 </head>
 <body>
 <div class="installer-shell" id="installer-step-meta" data-step="<?= (int) $step ?>" data-max-step="<?= (int) $maxStep ?>" data-autorun="<?= ($step === 2 && $maxStep >= 2 && ! ($req['vendor_ok'] && $maxStep >= 3)) ? '1' : '0' ?>">
-    <h1 class="header-title mb-1"><i class="bi bi-gear-wide-connected text-primary me-2"></i>Установка IT-Master</h1>
-    <p class="text-muted mb-4">Мастер поможет поставить Composer, зависимости, создать <code>.env</code> и подготовить базу. Шаги открываются по очереди.</p>
+    <div class="installer-top">
+        <h1 class="header-title"><i class="bi bi-gear-wide-connected text-primary me-1"></i>Установка IT-Master</h1>
+    </div>
+    <p class="installer-lead">Composer, зависимости, <code>.env</code>, миграции. Шаги по очереди.</p>
 
     <div class="profile-tabs" role="tablist">
         <a class="profile-tab <?= $step === 1 ? 'active' : '' ?>" href="?step=1">1. Проверка</a>
         <?php if ($maxStep >= 2): ?>
             <a class="profile-tab <?= $step === 2 ? 'active' : '' ?>" href="?step=2">2. Composer</a>
         <?php else: ?>
-            <span class="profile-tab locked" title="Сначала завершите шаг 1">2. Composer <i class="bi bi-lock-fill small"></i></span>
+            <span class="profile-tab locked" title="Сначала завершите шаг 1">2. <i class="bi bi-lock-fill"></i></span>
         <?php endif; ?>
         <?php if ($maxStep >= 3): ?>
             <a class="profile-tab <?= $step === 3 ? 'active' : '' ?>" href="?step=3">3. Настройка</a>
         <?php else: ?>
-            <span class="profile-tab locked" title="Сначала завершите шаг 2">3. Настройка <i class="bi bi-lock-fill small"></i></span>
+            <span class="profile-tab locked" title="Сначала завершите шаг 2">3. <i class="bi bi-lock-fill"></i></span>
         <?php endif; ?>
     </div>
 
-    <?php if ($dirErrors !== []): ?>
-        <div class="notification-panel border border-danger border-opacity-25">
-            <div class="section-title text-danger">Каталоги</div>
-            <ul class="mb-0"><?php foreach ($dirErrors as $e) {
-                echo '<li>'.installer_h($e).'</li>';
-            } ?></ul>
-        </div>
-    <?php endif; ?>
-
-    <div class="mb-3 d-none" id="global-progress-wrap">
-        <div class="d-flex justify-content-between small text-muted mb-1">
-            <span id="global-progress-label">Выполняется…</span>
-            <span id="global-progress-pct">0%</span>
-        </div>
-        <div class="progress">
-            <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="global-progress-bar" role="progressbar" style="width: 0%"></div>
-        </div>
-    </div>
-
-    <div class="notification-panel">
-        <div class="section-title">Консоль</div>
-        <div class="console-panel" id="installer-console"></div>
-    </div>
-
-    <?php if ($step === 1): ?>
-        <div class="notification-panel">
-            <div class="section-title">Требования</div>
-            <div class="table-responsive">
-                <table class="table install-checks mb-0">
-                    <tbody>
-                    <?php foreach ($req['checks'] as $c): ?>
-                        <tr>
-                            <td><?= installer_h($c['label']) ?></td>
-                            <td>
-                                <?php if ($c['ok']): ?>
-                                    <span class="badge text-bg-success">Ок</span>
-                                <?php else: ?>
-                                    <span class="badge text-bg-danger">Нет</span>
-                                <?php endif; ?>
-                                <div class="text-muted small"><?= installer_h($c['detail']) ?></div>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php if (! $req['core_ok']): ?>
-                <p class="text-danger small mt-3 mb-0">Устраните проблемы и обновите страницу. Обязательны: PHP 8.2+, основные расширения, <code>proc_open</code>, читаемый <code>.env.example</code>.</p>
-            <?php endif; ?>
-            <div class="mt-3">
-                <?php if ($req['core_ok'] && $dirErrors === []): ?>
-                    <form method="post" action="install.php" class="d-inline">
-                        <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
-                        <input type="hidden" name="installer_unlock" value="step2">
-                        <button type="submit" class="btn btn-gradient">Далее: Composer <i class="bi bi-arrow-right ms-1"></i></button>
-                    </form>
-                <?php else: ?>
-                    <button class="btn btn-gradient" type="button" disabled>Далее: Composer</button>
+    <div class="installer-workspace">
+        <aside class="installer-console-card" aria-label="Консоль">
+            <div class="installer-console-head">Консоль</div>
+            <div class="console-panel" id="installer-console"></div>
+        </aside>
+        <main class="installer-main-card">
+            <div class="installer-main-inner">
+                <?php if ($dirErrors !== []): ?>
+                    <div class="dir-errors-compact border border-danger border-opacity-50 bg-danger bg-opacity-10">
+                        <strong class="text-danger">Каталоги</strong>
+                        <ul><?php foreach ($dirErrors as $e) {
+                            echo '<li>'.installer_h($e).'</li>';
+                        } ?></ul>
+                    </div>
                 <?php endif; ?>
-            </div>
-        </div>
-    <?php endif; ?>
 
-    <?php if ($step === 2): ?>
-        <div class="notification-panel">
-            <?php if ($maxStep < 2 || ! $req['core_ok'] || $dirErrors !== []): ?>
-                <p class="text-danger">Шаг 2 недоступен. Вернитесь на шаг 1 и подтвердите проверку.</p>
-                <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> К шагу 1</a>
-            <?php else: ?>
-                <div class="section-title">Composer и зависимости</div>
-                <p class="text-muted small mb-2">Если <code>composer.phar</code> или каталог <code>vendor/</code> отсутствуют, они будут загружены и установлены автоматически (скачивание с getcomposer.org с проверкой SHA-384).</p>
-                <p class="small text-muted mb-3" id="step2-status">
-                    <?php if ($req['vendor_ok'] && $maxStep >= 3): ?>
-                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Готово. Переходите к шагу 3.</span>
-                    <?php else: ?>
-                        <span class="text-primary"><i class="bi bi-hourglass-split me-1"></i>Подготовка запускается автоматически…</span>
-                    <?php endif; ?>
-                </p>
-
-                <div class="d-flex flex-wrap gap-2 mb-2">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-retry-stack" <?= ($req['vendor_ok'] && $maxStep >= 3) ? 'disabled' : '' ?>>
-                        <i class="bi bi-arrow-repeat me-1"></i> Повторить загрузку / composer install
-                    </button>
+                <div class="d-none" id="global-progress-wrap">
+                    <div class="d-flex justify-content-between text-muted mb-1" style="font-size: 0.68rem;">
+                        <span id="global-progress-label">Выполняется…</span>
+                        <span id="global-progress-pct">0%</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="global-progress-bar" role="progressbar" style="width: 0%"></div>
+                    </div>
                 </div>
-                <p class="small text-muted mb-0">Хэш установщика Composer — в константе <code>COMPOSER_INSTALLER_SHA384</code> в <code>install.php</code>; при смене на getcomposer.org обновите его вручную.</p>
 
-                <div class="mt-3 d-flex flex-wrap gap-2">
-                    <a class="btn btn-secondary" href="?step=1"><i class="bi bi-arrow-left"></i> Назад</a>
-                    <?php if ($maxStep >= 3): ?>
-                        <a class="btn btn-gradient" href="?step=3">Далее: настройка <i class="bi bi-arrow-right ms-1"></i></a>
-                    <?php else: ?>
-                        <button type="button" class="btn btn-gradient" disabled id="link-step3-pending">Далее: настройка <i class="bi bi-lock ms-1"></i></button>
-                    <?php endif; ?>
-                </div>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if ($step === 3): ?>
-        <div class="notification-panel">
-            <?php if ($maxStep < 3 || ! $req['core_ok'] || $dirErrors !== [] || ! $req['vendor_ok']): ?>
-                <p class="text-danger">Шаг 3 доступен только после успешного шага 2 и наличия <code>vendor/</code>.</p>
-                <a class="btn btn-secondary" href="?step=2">К шагу 2</a>
-            <?php else: ?>
-                <div class="section-title">Параметры приложения</div>
-                <form id="form-finalize" class="row g-3">
-                    <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
-
-                    <div class="col-12">
-                        <label class="form-label" for="app_name">Название (APP_NAME)</label>
-                        <input class="form-control" id="app_name" name="app_name" required value="<?= installer_h($_POST['app_name'] ?? 'IT-Master') ?>">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="app_url">URL сайта (APP_URL)</label>
-                        <input class="form-control" id="app_url" name="app_url" required placeholder="http://localhost:8000" value="<?= installer_h($_POST['app_url'] ?? $defaultUrl) ?>">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="db_connection">База данных</label>
-                        <select class="form-select" id="db_connection" name="db_connection">
-                            <option value="sqlite" selected>SQLite</option>
-                            <option value="mysql">MySQL / MariaDB</option>
-                        </select>
-                    </div>
-                    <div id="mysql-fields" class="col-12" style="display:none">
-                        <div class="row g-2">
-                            <div class="col-md-6">
-                                <label class="form-label" for="db_host">Хост</label>
-                                <input class="form-control" id="db_host" name="db_host" value="127.0.0.1">
+                <?php if ($step === 1): ?>
+                    <div class="notification-panel">
+                        <div class="section-title">Требования</div>
+                        <div class="step-body">
+                            <div class="step-body-scroll-fake">
+                                <table class="table install-checks mb-0">
+                                    <tbody>
+                                    <?php foreach ($req['checks'] as $c): ?>
+                                        <tr title="<?= installer_h($c['detail']) ?>">
+                                            <td title="<?= installer_h($c['label']) ?>"><?= installer_h($c['label']) ?></td>
+                                            <td title="<?= installer_h($c['detail']) ?>">
+                                                <?php if ($c['ok']): ?>
+                                                    <span class="badge text-bg-success">Ок</span>
+                                                <?php else: ?>
+                                                    <span class="badge text-bg-danger">Нет</span>
+                                                <?php endif; ?>
+                                                <div class="cell-detail text-muted"><?= installer_h($c['detail']) ?></div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="db_port">Порт</label>
-                                <input class="form-control" id="db_port" name="db_port" value="3306">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label" for="db_database">Имя базы</label>
-                                <input class="form-control" id="db_database" name="db_database" value="">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="db_username">Пользователь</label>
-                                <input class="form-control" id="db_username" name="db_username" value="root">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="db_password">Пароль</label>
-                                <input class="form-control" id="db_password" name="db_password" type="password" value="">
+                            <?php if (! $req['core_ok']): ?>
+                                <p class="text-danger mb-0" style="font-size: 0.68rem; margin-top: 0.25rem;">Исправьте окружение и обновите страницу.</p>
+                            <?php endif; ?>
+                            <div class="installer-actions">
+                                <?php if ($req['core_ok'] && $dirErrors === []): ?>
+                                    <form method="post" action="install.php" class="d-inline">
+                                        <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
+                                        <input type="hidden" name="installer_unlock" value="step2">
+                                        <button type="submit" class="btn btn-gradient">Далее: Composer <i class="bi bi-arrow-right ms-1"></i></button>
+                                    </form>
+                                <?php else: ?>
+                                    <button class="btn btn-gradient" type="button" disabled>Далее: Composer</button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12">
-                        <p class="small text-muted mb-0">Будут выполнены: <code>php artisan key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code>.</p>
+                <?php endif; ?>
+
+                <?php if ($step === 2): ?>
+                    <div class="notification-panel">
+                        <?php if ($maxStep < 2 || ! $req['core_ok'] || $dirErrors !== []): ?>
+                            <p class="text-danger small mb-2">Шаг 2 недоступен.</p>
+                            <a class="btn btn-secondary btn-sm" href="?step=1"><i class="bi bi-arrow-left"></i> Шаг 1</a>
+                        <?php else: ?>
+                            <div class="section-title">Composer</div>
+                            <div class="step-body">
+                                <p class="text-muted mb-1" style="font-size: 0.68rem; line-height: 1.3;">Авто: <code>composer.phar</code> и <code>composer install</code> при необходимости (SHA-384).</p>
+                                <p class="mb-1" style="font-size: 0.72rem;" id="step2-status">
+                                    <?php if ($req['vendor_ok'] && $maxStep >= 3): ?>
+                                        <span class="text-success"><i class="bi bi-check-circle me-1"></i>Готово — шаг 3.</span>
+                                    <?php else: ?>
+                                        <span class="text-primary"><i class="bi bi-hourglass-split me-1"></i>Запуск…</span>
+                                    <?php endif; ?>
+                                </p>
+                                <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="btn-retry-stack" <?= ($req['vendor_ok'] && $maxStep >= 3) ? 'disabled' : '' ?>>
+                                    <i class="bi bi-arrow-repeat"></i> Повторить
+                                </button>
+                                <p class="text-muted mb-0 mt-1" style="font-size: 0.62rem;">Хэш: <code>COMPOSER_INSTALLER_SHA384</code> в <code>install.php</code>.</p>
+                                <div class="installer-actions d-flex flex-wrap gap-1">
+                                    <a class="btn btn-secondary btn-sm" href="?step=1"><i class="bi bi-arrow-left"></i></a>
+                                    <?php if ($maxStep >= 3): ?>
+                                        <a class="btn btn-gradient btn-sm" href="?step=3">Далее <i class="bi bi-arrow-right ms-1"></i></a>
+                                    <?php else: ?>
+                                        <button type="button" class="btn btn-gradient btn-sm" disabled id="link-step3-pending"><i class="bi bi-lock"></i></button>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                    <div class="col-12 d-flex flex-wrap gap-2">
-                        <a class="btn btn-secondary" href="?step=2"><i class="bi bi-arrow-left"></i> Назад</a>
-                        <button type="submit" class="btn btn-gradient" id="btn-finalize">
-                            <i class="bi bi-lightning-charge me-1"></i> Завершить установку
-                        </button>
+                <?php endif; ?>
+
+                <?php if ($step === 3): ?>
+                    <div class="notification-panel">
+                        <?php if ($maxStep < 3 || ! $req['core_ok'] || $dirErrors !== [] || ! $req['vendor_ok']): ?>
+                            <p class="text-danger small mb-2">Шаг 3 недоступен.</p>
+                            <a class="btn btn-secondary btn-sm" href="?step=2">Шаг 2</a>
+                        <?php else: ?>
+                            <div class="section-title">Параметры</div>
+                            <div class="step-body">
+                                <form id="form-finalize" class="row form-finalize-compact g-2">
+                                    <input type="hidden" name="installer_token" value="<?= installer_h($token) ?>">
+
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="app_name">APP_NAME</label>
+                                        <input class="form-control" id="app_name" name="app_name" required value="<?= installer_h($_POST['app_name'] ?? 'IT-Master') ?>">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="app_url">APP_URL</label>
+                                        <input class="form-control" id="app_url" name="app_url" required placeholder="http://localhost:8000" value="<?= installer_h($_POST['app_url'] ?? $defaultUrl) ?>">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="db_connection">БД</label>
+                                        <select class="form-select" id="db_connection" name="db_connection">
+                                            <option value="sqlite" selected>SQLite</option>
+                                            <option value="mysql">MySQL</option>
+                                        </select>
+                                    </div>
+                                    <div id="mysql-fields" class="col-12" style="display:none">
+                                        <div class="row g-2">
+                                            <div class="col-6 col-md-3">
+                                                <label class="form-label" for="db_host">Хост</label>
+                                                <input class="form-control" id="db_host" name="db_host" value="127.0.0.1">
+                                            </div>
+                                            <div class="col-6 col-md-3">
+                                                <label class="form-label" for="db_port">Порт</label>
+                                                <input class="form-control" id="db_port" name="db_port" value="3306">
+                                            </div>
+                                            <div class="col-12 col-md-6">
+                                                <label class="form-label" for="db_database">Имя БД</label>
+                                                <input class="form-control" id="db_database" name="db_database" value="">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label" for="db_username">Пользователь</label>
+                                                <input class="form-control" id="db_username" name="db_username" value="root">
+                                            </div>
+                                            <div class="col-6">
+                                                <label class="form-label" for="db_password">Пароль</label>
+                                                <input class="form-control" id="db_password" name="db_password" type="password" value="">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-12">
+                                        <p class="text-muted mb-0" style="font-size: 0.62rem;"><code>key:generate</code>, <code>migrate</code>, <code>db:seed</code>, <code>storage:link</code></p>
+                                    </div>
+                                    <div class="col-12 installer-actions d-flex flex-wrap gap-1">
+                                        <a class="btn btn-secondary btn-sm" href="?step=2"><i class="bi bi-arrow-left"></i></a>
+                                        <button type="submit" class="btn btn-gradient btn-sm" id="btn-finalize">
+                                            <i class="bi bi-lightning-charge me-1"></i> Завершить
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        <?php endif; ?>
                     </div>
-                </form>
-            <?php endif; ?>
-        </div>
-    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </main>
+    </div>
 </div>
 
 <script src="<?= installer_h($bootstrapJs) ?>" crossorigin="anonymous"></script>
@@ -868,10 +1074,14 @@ header('Content-Type: text/html; charset=utf-8');
     var progressPct = document.getElementById('global-progress-pct');
     var progressLabel = document.getElementById('global-progress-label');
 
+    var consoleMaxChars = 12000;
     function appendConsole(text) {
         if (!consoleEl) return;
-        consoleEl.textContent += (consoleEl.textContent ? '\n' : '') + text;
-        consoleEl.scrollTop = consoleEl.scrollHeight;
+        var next = (consoleEl.textContent ? consoleEl.textContent + '\n' : '') + text;
+        if (next.length > consoleMaxChars) {
+            next = '… [обрезано]\n' + next.slice(next.length - consoleMaxChars);
+        }
+        consoleEl.textContent = next;
     }
 
     function setProgress(p, label) {
