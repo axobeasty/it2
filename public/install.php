@@ -99,6 +99,65 @@ function installer_ensure_directories(): array
     return $errors;
 }
 
+/**
+ * Окружение для proc_open: без явной передачи у дочернего процесса часто нет HOME (FCGI/CGI),
+ * из‑за чего composer-setup и composer ругаются на COMPOSER_HOME/HOME.
+ */
+function installer_proc_environment(): array
+{
+    $env = [];
+    foreach ($_SERVER as $k => $v) {
+        if (! is_string($v)) {
+            continue;
+        }
+        if (! preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', (string) $k)) {
+            continue;
+        }
+        $env[(string) $k] = $v;
+    }
+    foreach ($_ENV as $k => $v) {
+        if (is_string($v)) {
+            $env[(string) $k] = $v;
+        }
+    }
+
+    $fromGetenv = ['PATH', 'PATHEXT', 'LANG', 'LC_ALL', 'USER', 'USERNAME', 'TMPDIR', 'TEMP', 'TMP', 'HOME', 'COMPOSER_HOME'];
+    if (PHP_OS_FAMILY === 'Windows') {
+        $fromGetenv = array_merge($fromGetenv, ['SystemRoot', 'WINDIR', 'LOCALAPPDATA', 'APPDATA']);
+    }
+    foreach ($fromGetenv as $name) {
+        if (! isset($env[$name]) || $env[$name] === '') {
+            $g = getenv($name);
+            if (is_string($g) && $g !== '') {
+                $env[$name] = $g;
+            }
+        }
+    }
+
+    $composerHome = INSTALLER_ROOT.DIRECTORY_SEPARATOR.'.composer';
+    if (! is_dir($composerHome)) {
+        @mkdir($composerHome, 0775, true);
+    }
+    $env['COMPOSER_HOME'] = $composerHome;
+
+    $home = $env['HOME'] ?? '';
+    if ($home === '') {
+        if (extension_loaded('posix')) {
+            $pw = posix_getpwuid(posix_geteuid());
+            if (is_array($pw) && ! empty($pw['dir'])) {
+                $home = (string) $pw['dir'];
+            }
+        }
+    }
+    if ($home === '') {
+        $tmp = sys_get_temp_dir();
+        $home = ($tmp !== '' && is_dir($tmp)) ? $tmp : INSTALLER_ROOT;
+    }
+    $env['HOME'] = $home;
+
+    return $env;
+}
+
 function installer_proc(string $command, string $cwd): array
 {
     $descriptors = [
@@ -107,7 +166,7 @@ function installer_proc(string $command, string $cwd): array
         2 => ['pipe', 'w'],
     ];
 
-    $process = @proc_open($command, $descriptors, $pipes, $cwd);
+    $process = @proc_open($command, $descriptors, $pipes, $cwd, installer_proc_environment());
     if (! is_resource($process)) {
         return ['code' => -1, 'output' => 'Не удалось запустить процесс. Проверьте proc_open и права.'];
     }
