@@ -56,6 +56,7 @@ Route::post('/groups/{id}/assign-students', [GroupController::class, 'assignStud
 Route::get('/groups/students/{id}/detach', [GroupController::class, 'detachStudent']);
 
 Route::get('/schedule', [GroupScheduleController::class, 'mySchedule'])->name('schedule.my');
+Route::get('/schedule/teacher', [GroupScheduleController::class, 'teacherSchedule'])->name('schedule.teacher');
 Route::get('/schedule/constructor', [GroupScheduleController::class, 'constructor'])->name('schedule.constructor');
 Route::post('/schedule/entries', [GroupScheduleController::class, 'store'])->name('schedule.entries.store');
 Route::post('/schedule/entries/{id}/edit', [GroupScheduleController::class, 'update'])->name('schedule.entries.update');

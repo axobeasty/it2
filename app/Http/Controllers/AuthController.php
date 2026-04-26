@@ -69,14 +69,23 @@ class AuthController extends Controller
         $employee = Employee::with(['role', 'group'])->findOrFail($user->id);
 
         $canTasks = $employee->canAccessPage('tasks');
-        $canSchedule = $employee->canAccessPage('schedule_my');
+        $canScheduleMy = $employee->canAccessPage('schedule_my');
+        $canTeacherSchedule = $employee->canAccessPage('schedule_teacher');
+
+        // Расписание группы (студент): право schedule_my или студент с группой.
+        $studentish = $employee->canAccessPage('student_tests')
+            || (optional($employee->role)->name === 'Студент');
+        $canDashboardScheduleStudent = $canScheduleMy || ($studentish && (bool) $employee->group_id);
 
         $allowedViews = [];
         if ($canTasks) {
             $allowedViews[] = 'tasks';
         }
-        if ($canSchedule) {
+        if ($canDashboardScheduleStudent) {
             $allowedViews[] = 'schedule';
+        }
+        if ($canTeacherSchedule) {
+            $allowedViews[] = 'schedule_teacher';
         }
 
         $showDashboardViewSwitcher = count($allowedViews) > 1;
@@ -87,7 +96,7 @@ class AuthController extends Controller
             $dashboardMainBlock = $allowedViews[0];
         } else {
             $requested = $request->query('view');
-            if (is_string($requested) && in_array($requested, ['tasks', 'schedule'], true)) {
+            if (is_string($requested) && in_array($requested, ['tasks', 'schedule', 'schedule_teacher'], true)) {
                 $request->session()->put('dashboard_view', $requested);
             }
             $pref = $request->session()->get('dashboard_view', 'tasks');
@@ -105,18 +114,33 @@ class AuthController extends Controller
         $notifs = Notifs::where('employee_id', $user->id)->get();
 
         $schedulePreview = collect();
+        $scheduleTeacherPreview = collect();
         $scheduleWeekMonday = null;
-        if ($canSchedule && $dashboardMainBlock === 'schedule') {
+
+        $needsScheduleWeek = ($canDashboardScheduleStudent && $dashboardMainBlock === 'schedule')
+            || ($canTeacherSchedule && $dashboardMainBlock === 'schedule_teacher');
+        if ($needsScheduleWeek) {
             $scheduleWeekMonday = Carbon::now()->startOfWeek(Carbon::MONDAY);
-            if ($employee->group_id) {
-                $schedulePreview = GroupScheduleEntry::query()
-                    ->where('group_id', $employee->group_id)
-                    ->whereDate('week_start_date', $scheduleWeekMonday->toDateString())
-                    ->with(['teacher', 'scheduleSubject'])
-                    ->orderBy('weekday')
-                    ->orderBy('start_time')
-                    ->get();
-            }
+        }
+
+        if ($canDashboardScheduleStudent && $dashboardMainBlock === 'schedule' && $scheduleWeekMonday && $employee->group_id) {
+            $schedulePreview = GroupScheduleEntry::query()
+                ->where('group_id', $employee->group_id)
+                ->whereDate('week_start_date', $scheduleWeekMonday->toDateString())
+                ->with(['teacher', 'scheduleSubject'])
+                ->orderBy('weekday')
+                ->orderBy('start_time')
+                ->get();
+        }
+
+        if ($canTeacherSchedule && $dashboardMainBlock === 'schedule_teacher' && $scheduleWeekMonday) {
+            $scheduleTeacherPreview = GroupScheduleEntry::query()
+                ->where('teacher_id', $employee->id)
+                ->whereDate('week_start_date', $scheduleWeekMonday->toDateString())
+                ->with(['group', 'scheduleSubject'])
+                ->orderBy('weekday')
+                ->orderBy('start_time')
+                ->get();
         }
 
         if($settings->is_enabled == 1 || $user->canAccessPage('maintenance_bypass')){
@@ -128,9 +152,14 @@ class AuthController extends Controller
                 'notifs',
                 'dashboardMainBlock',
                 'schedulePreview',
+                'scheduleTeacherPreview',
                 'scheduleWeekMonday',
                 'employee',
                 'showDashboardViewSwitcher',
+                'canTasks',
+                'canScheduleMy',
+                'canTeacherSchedule',
+                'canDashboardScheduleStudent',
             ));
         }
 

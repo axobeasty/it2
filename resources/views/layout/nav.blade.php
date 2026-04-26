@@ -141,7 +141,7 @@
                 </li>
                 @endif
 
-                @if($canScheduleMy || $canScheduleConstructor || $canScheduleConstructorSettings)
+                @if($canScheduleMy || $canScheduleTeacher || $canScheduleConstructor || $canScheduleConstructorSettings)
                 <li class="nav-item dropdown"
                     onmouseenter="showDropdown(this)"
                     onmouseleave="hideDropdown(this)">
@@ -150,7 +150,10 @@
                     </a>
                     <ul class="dropdown-menu border-0 shadow-sm rounded-3 py-2">
                         @if($canScheduleMy)
-                            <li><a class="dropdown-item rounded-2 mx-1" href="{{ route('schedule.my') }}" title="Моё расписание"><i class="bi bi-calendar3 me-2 text-primary"></i><span class="dropdown-item-label">Моё расписание</span></a></li>
+                            <li><a class="dropdown-item rounded-2 mx-1" href="{{ route('schedule.my') }}" title="Расписание группы"><i class="bi bi-calendar3 me-2 text-primary"></i><span class="dropdown-item-label">Расписание (студенты)</span></a></li>
+                        @endif
+                        @if($canScheduleTeacher)
+                            <li><a class="dropdown-item rounded-2 mx-1" href="{{ route('schedule.teacher') }}" title="Расписание преподавателя"><i class="bi bi-calendar3-event me-2 text-primary"></i><span class="dropdown-item-label">Расписание (преподаватель)</span></a></li>
                         @endif
                         @if($canScheduleConstructor)
                             <li><a class="dropdown-item rounded-2 mx-1" href="{{ route('schedule.constructor') }}" title="Конструктор расписания"><i class="bi bi-calendar-plus me-2 text-primary"></i><span class="dropdown-item-label">Конструктор</span></a></li>

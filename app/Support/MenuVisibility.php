@@ -32,6 +32,7 @@ class MenuVisibility
             'canTestsAdmin' => $user->canAccessPage('tests_admin'),
             'canTestsStats' => $user->canAccessPage('tests_stats'),
             'canScheduleMy' => $user->canAccessPage('schedule_my'),
+            'canScheduleTeacher' => $user->canAccessPage('schedule_teacher'),
             'canScheduleConstructor' => $user->canAccessPage('schedule_constructor'),
             'canScheduleConstructorSettings' => $user->canAccessPage('schedule_constructor_settings'),
         ];

@@ -62,6 +62,39 @@ class GroupScheduleController extends Controller
         ]);
     }
 
+    public function teacherSchedule(Request $request)
+    {
+        $user = $request->session()->get('user');
+        $settings = Settings::where('id', 1)->first();
+
+        if (! $user->canAccessPage('schedule_teacher')) {
+            Toastr::error('У вас нет доступа к просмотру расписания преподавателя.', 'Ошибка доступа', ['progressBar' => true]);
+
+            return redirect('/');
+        }
+
+        $employee = Employee::with('role')->findOrFail($user->id);
+        $weekMonday = $this->resolveMonday($request->input('week'));
+
+        $entries = GroupScheduleEntry::query()
+            ->where('teacher_id', $employee->id)
+            ->whereDate('week_start_date', $weekMonday->toDateString())
+            ->with(['group', 'scheduleSubject'])
+            ->orderBy('weekday')
+            ->orderBy('start_time')
+            ->get();
+
+        $entriesByWeekday = $entries->groupBy('weekday');
+
+        return view('schedule.teacher', [
+            'user' => $user,
+            'settings' => $settings,
+            'employee' => $employee,
+            'weekMonday' => $weekMonday,
+            'entriesByWeekday' => $entriesByWeekday,
+        ]);
+    }
+
     public function constructor(Request $request)
     {
         $user = $request->session()->get('user');

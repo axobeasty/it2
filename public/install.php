@@ -2,6 +2,9 @@
 
 /**
  * Веб-установщик IT-Master (Laravel).
+ * Рассчитан на Linux и Windows (IIS / встроенный сервер PHP, OpenServer, XAMPP и т.п.):
+ * proc_open с массивом argv и bypass_shell на Windows, обход ограничений is_executable() для php.exe.
+ *
  * После успешной установки создаётся storage/framework/installer.lock.
  * На production удалите этот файл или ограничьте доступ.
  */
@@ -37,6 +40,28 @@ function installer_env_quote(string $value): string
     return '"'.str_replace(['\\', '"', "\n", "\r"], ['\\\\', '\"', '', ''], $value).'"';
 }
 
+function installer_project_root(): string
+{
+    $r = realpath(INSTALLER_ROOT);
+
+    return $r !== false ? $r : INSTALLER_ROOT;
+}
+
+/**
+ * На Windows под IIS is_executable() для php.exe часто возвращает false — достаточно существования файла.
+ */
+function installer_is_cli_binary_candidate(string $path): bool
+{
+    if (! is_file($path)) {
+        return false;
+    }
+    if (PHP_OS_FAMILY === 'Windows') {
+        return true;
+    }
+
+    return @is_executable($path);
+}
+
 /**
  * Путь к PHP CLI для proc_open (artisan, composer-setup, composer.phar).
  * В IIS/FastCGI PHP_BINARY часто указывает на php-cgi — у него нет флага -r и иной интерфейс.
@@ -60,13 +85,13 @@ function installer_php_binary(): string
             ];
         }
         foreach ($candidates as $c) {
-            if ($c !== '' && is_file($c) && @is_executable($c)) {
+            if ($c !== '' && installer_is_cli_binary_candidate($c)) {
                 return $c;
             }
         }
     }
 
-    if ($binary !== '' && @is_executable($binary) && ! str_contains(strtolower(basename($binary)), 'php-cgi')) {
+    if ($binary !== '' && installer_is_cli_binary_candidate($binary) && ! str_contains(strtolower(basename($binary)), 'php-cgi')) {
         return $binary;
     }
 
@@ -86,8 +111,9 @@ function installer_ensure_directories(): array
         'bootstrap/cache',
         'database',
     ];
+    $root = installer_project_root();
     foreach ($relative as $rel) {
-        $path = INSTALLER_ROOT.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $rel);
+        $path = $root.DIRECTORY_SEPARATOR.str_replace('/', DIRECTORY_SEPARATOR, $rel);
         if (is_dir($path)) {
             continue;
         }
@@ -123,7 +149,10 @@ function installer_proc_environment(): array
 
     $fromGetenv = ['PATH', 'PATHEXT', 'LANG', 'LC_ALL', 'USER', 'USERNAME', 'TMPDIR', 'TEMP', 'TMP', 'HOME', 'COMPOSER_HOME'];
     if (PHP_OS_FAMILY === 'Windows') {
-        $fromGetenv = array_merge($fromGetenv, ['SystemRoot', 'WINDIR', 'LOCALAPPDATA', 'APPDATA']);
+        $fromGetenv = array_merge(
+            $fromGetenv,
+            ['SystemRoot', 'WINDIR', 'LOCALAPPDATA', 'APPDATA', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'COMSPEC']
+        );
     }
     foreach ($fromGetenv as $name) {
         if (! isset($env[$name]) || $env[$name] === '') {
@@ -134,13 +163,21 @@ function installer_proc_environment(): array
         }
     }
 
-    $composerHome = INSTALLER_ROOT.DIRECTORY_SEPARATOR.'.composer';
+    $composerHome = installer_project_root().DIRECTORY_SEPARATOR.'.composer';
     if (! is_dir($composerHome)) {
         @mkdir($composerHome, 0775, true);
     }
     $env['COMPOSER_HOME'] = $composerHome;
 
     $home = $env['HOME'] ?? '';
+    if ($home === '' && PHP_OS_FAMILY === 'Windows') {
+        $up = $env['USERPROFILE'] ?? '';
+        if ($up !== '') {
+            $home = $up;
+        } elseif (($env['HOMEDRIVE'] ?? '') !== '' && ($env['HOMEPATH'] ?? '') !== '') {
+            $home = $env['HOMEDRIVE'].$env['HOMEPATH'];
+        }
+    }
     if ($home === '') {
         if (extension_loaded('posix')) {
             $pw = posix_getpwuid(posix_geteuid());
@@ -151,22 +188,31 @@ function installer_proc_environment(): array
     }
     if ($home === '') {
         $tmp = sys_get_temp_dir();
-        $home = ($tmp !== '' && is_dir($tmp)) ? $tmp : INSTALLER_ROOT;
+        $home = ($tmp !== '' && is_dir($tmp)) ? $tmp : installer_project_root();
     }
     $env['HOME'] = $home;
 
     return $env;
 }
 
-function installer_proc(string $command, string $cwd): array
+/**
+ * Запуск подпроцесса без оболочки (на Windows — bypass_shell), чтобы не ломались пути с пробелами и кавычками.
+ *
+ * @param  list<string>  $command  [полный_путь_к_php_или_имя, арг1, …]
+ */
+function installer_proc(array $command, ?string $cwd = null): array
 {
+    $cwd = $cwd ?? installer_project_root();
     $descriptors = [
         0 => ['pipe', 'r'],
         1 => ['pipe', 'w'],
         2 => ['pipe', 'w'],
     ];
 
-    $process = @proc_open($command, $descriptors, $pipes, $cwd, installer_proc_environment());
+    $env = installer_proc_environment();
+    $options = PHP_OS_FAMILY === 'Windows' ? ['bypass_shell' => true] : [];
+
+    $process = @proc_open($command, $descriptors, $pipes, $cwd, $env, $options);
     if (! is_resource($process)) {
         return ['code' => -1, 'output' => 'Не удалось запустить процесс. Проверьте proc_open и права.'];
     }
@@ -321,7 +367,7 @@ function installer_requirements(): array
     $pdoMysql = extension_loaded('pdo_mysql');
     $checks[] = ['label' => 'Расширение pdo_mysql (для MySQL)', 'ok' => true, 'detail' => $pdoMysql ? 'есть' : 'нужно, если выберете MySQL'];
 
-    $vendor = is_file(INSTALLER_ROOT.'/vendor/autoload.php');
+    $vendor = is_file(installer_project_root().DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php');
     $checks[] = [
         'label' => 'Зависимости Composer (vendor/)',
         'ok' => $vendor,
@@ -335,6 +381,12 @@ function installer_requirements(): array
     $procOpen = function_exists('proc_open');
     $checks[] = ['label' => 'Функция proc_open', 'ok' => $procOpen, 'detail' => $procOpen ? 'доступна' : 'нужна для команд; включите в php.ini'];
     $coreOk = $coreOk && $procOpen;
+
+    $osFamily = PHP_OS_FAMILY;
+    $osDetail = PHP_OS_FAMILY === 'Windows'
+        ? 'Для IIS убедитесь, что рядом с php-cgi.exe есть php.exe (CLI) или php.exe в PATH — установщик запускает Composer и artisan через CLI.'
+        : 'Типично: Linux с PHP-FPM; команды идут через proc_open без shell.';
+    $checks[] = ['label' => 'Среда ('.$osFamily.')', 'ok' => true, 'detail' => $osDetail];
 
     return [
         'checks' => $checks,
@@ -390,10 +442,11 @@ function installer_build_env(array $in): string
 
 function installer_run_artisan(string $arguments): array
 {
-    $root = INSTALLER_ROOT;
+    $root = installer_project_root();
     $php = installer_php_binary();
     $artisan = $root.DIRECTORY_SEPARATOR.'artisan';
-    $cmd = escapeshellarg($php).' '.escapeshellarg($artisan).' '.$arguments;
+    $args = preg_split('/\s+/', trim($arguments), -1, PREG_SPLIT_NO_EMPTY);
+    $cmd = array_merge([$php, $artisan], $args);
 
     return installer_proc($cmd, $root);
 }
@@ -408,7 +461,7 @@ function installer_api_verify_token(): bool
 function installer_api_composer_phar(): array
 {
     $php = installer_php_binary();
-    $root = INSTALLER_ROOT;
+    $root = installer_project_root();
     $pharPath = $root.DIRECTORY_SEPARATOR.'composer.phar';
     if (is_file($pharPath)) {
         return [
@@ -459,7 +512,7 @@ function installer_api_composer_phar(): array
     }
 
     $log[] = 'Исполняемый PHP (CLI): '.$php;
-    $r3 = installer_proc(escapeshellarg($php).' -f '.escapeshellarg('composer-setup.php'), $root);
+    $r3 = installer_proc([$php, '-f', 'composer-setup.php'], $root);
     $steps[] = ['label' => 'Запуск composer-setup.php', 'code' => $r3['code'], 'output' => $r3['output']];
     $log[] = '$ '.basename($php).' -f composer-setup.php'."\n".$r3['output'];
     if ($r3['code'] !== 0) {
@@ -489,17 +542,22 @@ function installer_api_composer_phar(): array
 
 function installer_api_composer_install(): array
 {
-    $root = INSTALLER_ROOT;
+    $root = installer_project_root();
     $phar = $root.DIRECTORY_SEPARATOR.'composer.phar';
     if (! is_file($phar)) {
         return ['ok' => false, 'log' => 'Файл composer.phar не найден. Сначала скачайте Composer.', 'steps' => []];
     }
 
     $php = installer_php_binary();
-    $cmd = escapeshellarg($php).' '.escapeshellarg('composer.phar').' install --no-interaction --prefer-dist';
-    $r = installer_proc($cmd, $root);
+    $r = installer_proc([
+        $php,
+        'composer.phar',
+        'install',
+        '--no-interaction',
+        '--prefer-dist',
+    ], $root);
     $log = '$ php composer.phar install --no-interaction --prefer-dist'."\n".$r['output'];
-    $vendorOk = is_file($root.'/vendor/autoload.php');
+    $vendorOk = is_file($root.DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php');
 
     return [
         'ok' => $r['code'] === 0 && $vendorOk,
@@ -524,7 +582,7 @@ function installer_api_ensure_composer_stack(): array
     $logParts = [];
     $allSteps = [];
 
-    if (is_file(INSTALLER_ROOT.'/vendor/autoload.php')) {
+    if (is_file(installer_project_root().DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php')) {
         $_SESSION['installer_max_step'] = max($max, 3);
 
         return [
@@ -574,7 +632,11 @@ function installer_api_ensure_composer_stack(): array
     ];
 }
 
-function installer_api_finalize(array $data): array
+/**
+ * Шаг 1 финализации: проверки и запись .env (быстро). Дальше artisan — отдельными запросами,
+ * чтобы один длинный POST не обрывался браузером/прокси (часто на Windows и встроенном сервере PHP).
+ */
+function installer_api_finalize_prepare(array $data): array
 {
     $dbConn = ($data['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite';
 
@@ -586,7 +648,7 @@ function installer_api_finalize(array $data): array
         return ['ok' => false, 'log' => 'Укажите название приложения и URL.', 'steps' => []];
     }
 
-    if (! is_file(INSTALLER_ROOT.'/vendor/autoload.php')) {
+    if (! is_file(installer_project_root().DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php')) {
         return ['ok' => false, 'log' => 'Нет vendor/. Сначала выполните «Установить зависимости».', 'steps' => []];
     }
 
@@ -609,54 +671,80 @@ function installer_api_finalize(array $data): array
         return ['ok' => false, 'log' => $e->getMessage(), 'steps' => []];
     }
 
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
+
     if (@file_put_contents(INSTALLER_ENV, $envContent) === false) {
         return ['ok' => false, 'log' => 'Не удалось записать .env', 'steps' => []];
     }
 
     if ($dbConn === 'sqlite') {
-        $sqlitePath = INSTALLER_ROOT.'/database/database.sqlite';
+        $sqlitePath = installer_project_root().DIRECTORY_SEPARATOR.'database'.DIRECTORY_SEPARATOR.'database.sqlite';
         if (! is_file($sqlitePath)) {
             touch($sqlitePath);
         }
     }
 
-    $steps = [];
-    $logParts = [];
-    $failed = false;
+    return ['ok' => true, 'log' => 'Файл .env записан; при SQLite файл БД подготовлен. Далее по очереди: ключ, миграции, сиды, ссылка storage, lock.', 'steps' => []];
+}
 
-    foreach (['key:generate --force', 'migrate --force', 'db:seed --force'] as $artisanArgs) {
-        $r = installer_run_artisan($artisanArgs);
-        $steps[] = ['label' => 'artisan '.$artisanArgs, 'code' => $r['code'], 'output' => $r['output']];
-        $logParts[] = '$ php artisan '.$artisanArgs."\n".$r['output'];
-        if ($r['code'] !== 0) {
-            $failed = true;
-            break;
+/**
+ * Один шаг artisan при финализации (короткий HTTP-запрос).
+ *
+ * @param  string  $step  key|migrate|seed|link|lock
+ */
+function installer_api_finalize_artisan_step(string $step): array
+{
+    if ((int) ($_SESSION['installer_max_step'] ?? 1) < 3) {
+        return ['ok' => false, 'log' => 'Сначала завершите шаг 2.', 'steps' => []];
+    }
+
+    if (! is_file(INSTALLER_ENV) || ! is_readable(INSTALLER_ENV)) {
+        return ['ok' => false, 'log' => 'Нет читаемого .env. Сначала отправьте форму (этап подготовки).', 'steps' => []];
+    }
+
+    if (! is_file(installer_project_root().DIRECTORY_SEPARATOR.'vendor'.DIRECTORY_SEPARATOR.'autoload.php')) {
+        return ['ok' => false, 'log' => 'Нет vendor/autoload.php.', 'steps' => []];
+    }
+
+    $allowed = ['key', 'migrate', 'seed', 'link', 'lock'];
+    if (! in_array($step, $allowed, true)) {
+        return ['ok' => false, 'log' => 'Неизвестный этап: '.$step, 'steps' => []];
+    }
+
+    if ($step === 'lock') {
+        if (is_file(INSTALLER_LOCK)) {
+            return ['ok' => true, 'log' => 'installer.lock уже существует.', 'steps' => []];
         }
-    }
-
-    if (! $failed) {
-        $link = installer_run_artisan('storage:link');
-        $steps[] = ['label' => 'artisan storage:link', 'code' => $link['code'], 'output' => $link['output']];
-        $logParts[] = '$ php artisan storage:link'."\n".$link['output'];
-        if ($link['code'] !== 0) {
-            $failed = true;
+        $lockBody = "installed_at=".gmdate('c')."\n";
+        if (@file_put_contents(INSTALLER_LOCK, $lockBody) === false) {
+            return ['ok' => false, 'log' => 'Не удалось записать installer.lock', 'steps' => []];
         }
+
+        return ['ok' => true, 'log' => 'installer.lock создан. Установка завершена.', 'steps' => []];
     }
 
-    if ($failed) {
-        return ['ok' => false, 'log' => implode("\n\n", $logParts), 'steps' => $steps];
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
     }
 
-    $lockBody = "installed_at=".gmdate('c')."\n";
-    if (@file_put_contents(INSTALLER_LOCK, $lockBody) === false) {
-        return [
-            'ok' => false,
-            'log' => implode("\n\n", $logParts)."\n\nНе удалось записать installer.lock",
-            'steps' => $steps,
-        ];
+    $map = [
+        'key' => 'key:generate --force',
+        'migrate' => 'migrate --force',
+        'seed' => 'db:seed --force',
+        'link' => 'storage:link',
+    ];
+    $artisanArgs = $map[$step];
+    $r = installer_run_artisan($artisanArgs);
+    $steps = [['label' => 'artisan '.$artisanArgs, 'code' => $r['code'], 'output' => $r['output']]];
+    $log = '$ php artisan '.$artisanArgs."\n".$r['output'];
+
+    if ($r['code'] !== 0) {
+        return ['ok' => false, 'log' => $log, 'steps' => $steps];
     }
 
-    return ['ok' => true, 'log' => implode("\n\n", $logParts), 'steps' => $steps];
+    return ['ok' => true, 'log' => $log, 'steps' => $steps];
 }
 
 // -------------------------------------------------------------------------
@@ -767,19 +855,28 @@ if (
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
             exit;
         }
-        if ($action === 'finalize') {
+        if ($action === 'finalize_prepare') {
             $data = [
                 'app_name' => trim((string) ($_POST['app_name'] ?? '')),
                 'app_url' => trim((string) ($_POST['app_url'] ?? '')),
-                'db_connection' => $_POST['db_connection'] === 'mysql' ? 'mysql' : 'sqlite',
+                'db_connection' => ($_POST['db_connection'] ?? '') === 'mysql' ? 'mysql' : 'sqlite',
                 'db_host' => trim((string) ($_POST['db_host'] ?? '')),
                 'db_port' => trim((string) ($_POST['db_port'] ?? '3306')),
                 'db_database' => trim((string) ($_POST['db_database'] ?? '')),
                 'db_username' => trim((string) ($_POST['db_username'] ?? '')),
                 'db_password' => (string) ($_POST['db_password'] ?? ''),
             ];
-            $payload = installer_api_finalize($data);
-            if ($payload['ok']) {
+            $payload = installer_api_finalize_prepare($data);
+            echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+        if ($action === 'finalize_artisan') {
+            $step = trim((string) ($_POST['finalize_step'] ?? ''));
+            $payload = installer_api_finalize_artisan_step($step);
+            if ($payload['ok'] && $step === 'lock') {
+                if (session_status() !== PHP_SESSION_ACTIVE) {
+                    session_start();
+                }
                 $_SESSION['installer_token'] = bin2hex(random_bytes(16));
             }
             echo json_encode($payload, JSON_UNESCAPED_UNICODE);
@@ -1131,7 +1228,7 @@ header('Content-Type: text/html; charset=utf-8');
     <div class="installer-top">
         <h1 class="header-title"><i class="bi bi-gear-wide-connected text-primary me-1"></i>Установка IT-Master</h1>
     </div>
-    <p class="installer-lead">Composer, зависимости, <code>.env</code>, миграции. Шаги по очереди.</p>
+    <p class="installer-lead">Composer, зависимости, <code>.env</code>, миграции. Работает на Linux и Windows (IIS, OpenServer, XAMPP). Шаги по очереди.</p>
 
     <div class="profile-tabs" role="tablist">
         <a class="profile-tab <?= $step === 1 ? 'active' : '' ?>" href="?step=1">1. Проверка</a>
@@ -1363,6 +1460,14 @@ header('Content-Type: text/html; charset=utf-8');
         });
     }
 
+    var installerApiUrl = (function () {
+        try {
+            return new URL('install.php', window.location.href).href;
+        } catch (e) {
+            return 'install.php';
+        }
+    })();
+
     function postApi(apiAction, fields) {
         var body = new URLSearchParams();
         body.set('api_action', apiAction);
@@ -1372,13 +1477,14 @@ header('Content-Type: text/html; charset=utf-8');
                 body.set(pair[0], pair[1]);
             });
         }
-        return fetch('install.php', {
+        return fetch(installerApiUrl, {
             method: 'POST',
             headers: {
                 'X-Requested-With': 'XMLHttpRequest',
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
             },
-            body: body.toString()
+            body: body.toString(),
+            cache: 'no-store'
         }).then(function (r) {
             return r.text().then(function (t) {
                 try {
@@ -1388,6 +1494,14 @@ header('Content-Type: text/html; charset=utf-8');
                 }
             });
         });
+    }
+
+    function formatFetchError(err) {
+        var msg = (err && err.message) ? err.message : String(err);
+        if (msg === 'Failed to fetch' || (err && err.name === 'TypeError')) {
+            return msg + ' — запрос не дошёл до сервера (обрыв, таймаут, другой адрес). Проверьте, что страница открыта с того же хоста/порта, что и встроенный сервер (например php -S localhost:8080 -t public). Повторите отправку формы.';
+        }
+        return msg;
     }
 
     var stackRunning = false;
@@ -1417,7 +1531,7 @@ header('Content-Type: text/html; charset=utf-8');
                     if (retryBtn) retryBtn.disabled = false;
                 }
             }).catch(function (e) {
-                appendConsole('Ошибка: ' + e);
+                appendConsole('Ошибка: ' + formatFetchError(e));
                 setProgress(100, 'Ошибка');
                 hideProgressStripes();
                 var st = document.getElementById('step2-status');
@@ -1463,22 +1577,37 @@ header('Content-Type: text/html; charset=utf-8');
             fd.forEach(function (v, k) { pairs.push([k, v]); });
 
             fakeProgressWhile(
-                postApi('finalize', pairs).then(function (data) {
-                    appendConsole(data.log || JSON.stringify(data));
-                    setProgress(100, data.ok ? 'Установка завершена' : 'Ошибка');
-                    hideProgressStripes();
-                    if (data.ok) {
-                        var wrap = document.createElement('div');
-                        wrap.className = 'alert alert-success mt-3';
-                        wrap.innerHTML = '<strong>Готово.</strong> Перейдите на <a href="/" class="alert-link">главную</a>. Демо-вход: <code>test</code> / <code>123</code>. Удалите или защитите <code>public/install.php</code> на production.';
-                        formFin.appendChild(wrap);
+                postApi('finalize_prepare', pairs).then(function (prep) {
+                    appendConsole(prep.log || '');
+                    if (!prep.ok) {
+                        return Promise.reject(prep);
                     }
+                    var phases = ['key', 'migrate', 'seed', 'link', 'lock'];
+                    var labels = { key: 'Ключ приложения…', migrate: 'Миграции…', seed: 'Сиды…', link: 'storage:link…', lock: 'Завершение…' };
+                    return phases.reduce(function (chain, phase) {
+                        return chain.then(function () {
+                            if (progressLabel) progressLabel.textContent = labels[phase] || phase;
+                            return postApi('finalize_artisan', [['finalize_step', phase]]).then(function (data) {
+                                appendConsole(data.log || JSON.stringify(data));
+                                if (!data.ok) {
+                                    return Promise.reject(data);
+                                }
+                            });
+                        });
+                    }, Promise.resolve());
+                }).then(function () {
+                    setProgress(100, 'Установка завершена');
+                    hideProgressStripes();
+                    var wrap = document.createElement('div');
+                    wrap.className = 'alert alert-success mt-3';
+                    wrap.innerHTML = '<strong>Готово.</strong> Перейдите на <a href="/" class="alert-link">главную</a>. Демо-вход: <code>test</code> / <code>123</code>. Удалите или защитите <code>public/install.php</code> на production.';
+                    formFin.appendChild(wrap);
                 }).catch(function (e) {
-                    appendConsole('Ошибка: ' + e);
+                    appendConsole('Ошибка: ' + (e && e.log ? e.log : formatFetchError(e)));
                     setProgress(100, 'Ошибка');
                     hideProgressStripes();
                 }),
-                'Миграции и сиды…',
+                'Миграции и сиды (несколько запросов)…',
                 90
             ).finally(function () { if (btn) btn.disabled = false; });
         });

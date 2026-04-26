@@ -135,15 +135,25 @@
                                 <i class="bi bi-sliders text-primary"></i>
                                 <span class="small text-muted text-uppercase fw-semibold mb-0" style="letter-spacing: .04em;">Вид главной страницы</span>
                             </div>
-                            <div class="btn-group" role="group" aria-label="Переключение вида главной">
+                            <div class="btn-group flex-wrap" role="group" aria-label="Переключение вида главной">
+                                @if($canTasks ?? false)
                                 <a href="{{ url('/dashboard?view=tasks') }}"
                                    class="btn btn-sm {{ ($dashboardMainBlock ?? '') === 'tasks' ? 'btn-gradient' : 'btn-outline-secondary' }}">
                                     <i class="bi bi-check2-square me-1"></i>Задачи
                                 </a>
+                                @endif
+                                @if($canDashboardScheduleStudent ?? false)
                                 <a href="{{ url('/dashboard?view=schedule') }}"
                                    class="btn btn-sm {{ ($dashboardMainBlock ?? '') === 'schedule' ? 'btn-gradient' : 'btn-outline-secondary' }}">
-                                    <i class="bi bi-calendar-week me-1"></i>Расписание
+                                    <i class="bi bi-calendar-week me-1"></i>Расписание (студенты)
                                 </a>
+                                @endif
+                                @if($canTeacherSchedule ?? false)
+                                <a href="{{ url('/dashboard?view=schedule_teacher') }}"
+                                   class="btn btn-sm {{ ($dashboardMainBlock ?? '') === 'schedule_teacher' ? 'btn-gradient' : 'btn-outline-secondary' }}">
+                                    <i class="bi bi-calendar3-event me-1"></i>Расписание (преподаватель)
+                                </a>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -155,9 +165,16 @@
                         <div class="d-flex justify-content-between align-items-center mb-4">
                             @if(($dashboardMainBlock ?? 'tasks') === 'tasks')
                                 <h4 class="header-title mb-0">Задачи <a type="button" href="#" data-bs-toggle="modal" data-bs-target="#addtaskl"><i class="bi bi-plus-circle-fill"></i></a></h4>
-                            @else
+                            @elseif(($dashboardMainBlock ?? '') === 'schedule')
                                 <div>
-                                    <h4 class="header-title mb-0">Расписание занятий</h4>
+                                    <h4 class="header-title mb-0">Расписание (студенты)</h4>
+                                    @if(isset($scheduleWeekMonday) && $scheduleWeekMonday)
+                                        <p class="text-muted small mb-0">{{ $scheduleWeekMonday->format('d.m.Y') }} — {{ $scheduleWeekMonday->copy()->addDays(6)->format('d.m.Y') }}</p>
+                                    @endif
+                                </div>
+                            @elseif(($dashboardMainBlock ?? '') === 'schedule_teacher')
+                                <div>
+                                    <h4 class="header-title mb-0">Расписание (преподаватель)</h4>
                                     @if(isset($scheduleWeekMonday) && $scheduleWeekMonday)
                                         <p class="text-muted small mb-0">{{ $scheduleWeekMonday->format('d.m.Y') }} — {{ $scheduleWeekMonday->copy()->addDays(6)->format('d.m.Y') }}</p>
                                     @endif
@@ -199,7 +216,11 @@
                             @endif
                         @elseif(($dashboardMainBlock ?? '') === 'schedule')
                             <div class="d-flex justify-content-end mb-3">
-                                <a href="{{ route('schedule.my', ['week' => $scheduleWeekMonday?->toDateString()]) }}" class="btn btn-sm btn-outline-primary">Полное расписание</a>
+                                @if($canScheduleMy ?? false)
+                                    <a href="{{ route('schedule.my', ['week' => $scheduleWeekMonday?->toDateString()]) }}" class="btn btn-sm btn-outline-primary">Полное расписание</a>
+                                @else
+                                    <span class="small text-muted">Полная страница расписания — после выдачи права «Расписание: просмотр» в роли.</span>
+                                @endif
                             </div>
                             @if(!($employee->group_id ?? null))
                                 <div class="alert alert-warning mb-0">Вам ещё не назначена группа. Обратитесь к администратору.</div>
@@ -211,6 +232,23 @@
                                         <div class="small text-muted">{{ $entry->weekdayLabel() }} · {{ \Illuminate\Support\Str::substr($entry->start_time, 0, 5) }}—{{ \Illuminate\Support\Str::substr($entry->end_time, 0, 5) }}</div>
                                         <div class="fw-semibold">{{ optional($entry->scheduleSubject)->name ?? $entry->subject_title }}</div>
                                         <div class="small text-secondary">{{ $entry->teacher->fio ?? '—' }}@if($entry->room) · каб. {{ $entry->room }}@endif</div>
+                                    </div>
+                                @endforeach
+                            @endif
+                        @elseif(($dashboardMainBlock ?? '') === 'schedule_teacher')
+                            <div class="d-flex justify-content-end mb-3">
+                                @if($canTeacherSchedule ?? false)
+                                    <a href="{{ route('schedule.teacher', ['week' => $scheduleWeekMonday?->toDateString()]) }}" class="btn btn-sm btn-outline-primary">Полное расписание</a>
+                                @endif
+                            </div>
+                            @if($scheduleTeacherPreview->isEmpty())
+                                <p class="text-muted text-center py-4 mb-0">На эту неделю у вас нет занятий в расписании.</p>
+                            @else
+                                @foreach($scheduleTeacherPreview as $entry)
+                                    <div class="dash-schedule-row" style="border-left-color: #198754;">
+                                        <div class="small text-muted">{{ $entry->weekdayLabel() }} · {{ \Illuminate\Support\Str::substr($entry->start_time, 0, 5) }}—{{ \Illuminate\Support\Str::substr($entry->end_time, 0, 5) }}</div>
+                                        <div class="fw-semibold">{{ optional($entry->scheduleSubject)->name ?? $entry->subject_title }}</div>
+                                        <div class="small text-secondary">{{ optional($entry->group)->name ?? 'Группа' }}@if($entry->room) · каб. {{ $entry->room }}@endif</div>
                                     </div>
                                 @endforeach
                             @endif

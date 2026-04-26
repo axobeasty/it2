@@ -27,6 +27,7 @@ class PageAccess
         'tests_admin' => ['/tests/admin', '/tests/admin/create', '/tests/admin/{id}/toggle', '/tests/admin/{id}/edit', '/tests/admin/{id}/update'],
         'tests_stats' => ['/tests/stats', '/tests/stats/export', '/tests/stats/print'],
         'schedule_my' => ['/schedule'],
+        'schedule_teacher' => ['/schedule/teacher'],
         'schedule_constructor' => ['/schedule/constructor', '/schedule/entries', '/schedule/entries/{id}/edit', '/schedule/entries/{id}/delete', '/schedule/copy-week', '/schedule/recalculate-week'],
         'schedule_constructor_settings' => ['/schedule/constructor/settings', '/schedule/constructor/subjects', '/schedule/constructor/subjects/{id}/delete'],
         /** Программное право: вход в интерфейс при отключённом сайте (без привязки к URL). */
@@ -56,6 +57,7 @@ class PageAccess
         'tests_admin' => 'Администрирование тестов',
         'tests_stats' => 'Статистика тестирования',
         'schedule_my' => 'Расписание: просмотр (студент)',
+        'schedule_teacher' => 'Расписание: просмотр (преподаватель)',
         'schedule_constructor' => 'Расписание: конструктор (редактирование)',
         'schedule_constructor_settings' => 'Расписание: настройки конструктора',
         'maintenance_bypass' => 'Доступ при отключённом сайте (техобслуживание)',
@@ -75,7 +77,7 @@ class PageAccess
             'Инвентарь' => ['inventory_my', 'inventory_admin'],
             'Пользователи и группы' => ['employees_manage', 'roles_manage', 'groups_manage'],
             'Образование и тесты' => ['faculties_manage', 'chairs_manage', 'student_tests', 'tests_admin', 'tests_stats'],
-            'Расписание' => ['schedule_my', 'schedule_constructor', 'schedule_constructor_settings'],
+            'Расписание' => ['schedule_my', 'schedule_teacher', 'schedule_constructor', 'schedule_constructor_settings'],
             'Портфолио' => ['portfolio', 'portfolio_types', 'portfolio_confirm'],
             'Настройки и доступы' => ['settings', 'settings_database', 'password_manager', 'maintenance_bypass'],
         ];

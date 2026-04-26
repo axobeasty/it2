@@ -428,7 +428,7 @@
             </div>
         @endif
 
-        @if($canScheduleMy || $canScheduleConstructor || $canScheduleConstructorSettings)
+        @if($canScheduleMy || $canScheduleTeacher || $canScheduleConstructor || $canScheduleConstructorSettings)
             <div class="mb-4">
                 <h6 class="sidebar-section-title" data-section-icon="bi bi-calendar-week">
                     Расписание
@@ -436,9 +436,17 @@
                 <ul class="nav flex-column gap-1 sidebar-section-content is-collapsed">
                     @if($canScheduleMy)
                     <li>
-                        <a href="{{ route('schedule.my') }}" title="Моё расписание" class="nav-link sidebar-link d-flex align-items-center">
+                        <a href="{{ route('schedule.my') }}" title="Расписание группы" class="nav-link sidebar-link d-flex align-items-center">
                             <i class="bi bi-calendar3 me-2 text-primary"></i>
-                            <span class="fw-medium sidebar-link-text">Моё расписание</span>
+                            <span class="fw-medium sidebar-link-text">Расписание (студенты)</span>
+                        </a>
+                    </li>
+                    @endif
+                    @if($canScheduleTeacher)
+                    <li>
+                        <a href="{{ route('schedule.teacher') }}" title="Расписание преподавателя" class="nav-link sidebar-link d-flex align-items-center">
+                            <i class="bi bi-calendar3-event me-2 text-primary"></i>
+                            <span class="fw-medium sidebar-link-text">Расписание (преподаватель)</span>
                         </a>
                     </li>
                     @endif

@@ -14,6 +14,7 @@ class SchedulePagePermissionsSeeder extends Seeder
     {
         $now = now();
         $assign = [['Студент', 'schedule_my']];
+        $assign[] = ['Преподаватель', 'schedule_teacher'];
         foreach (['Администратор', 'Заместитель директора', 'Директор', 'Преподаватель'] as $roleName) {
             $assign[] = [$roleName, 'schedule_constructor'];
             $assign[] = [$roleName, 'schedule_constructor_settings'];
