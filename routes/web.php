@@ -127,6 +127,8 @@ Route::delete('/task/delete/{id}', [TaskController::class, 'delete'])->name('tas
 //Route::post('/task/done','App\Http\Controllers\TaskController@add_task');
 //Route::get('/task/done','App\Http\Controllers\TaskController@notallowed');
 Route::get('/profile', [ProfileController::class, 'show'])->name('profile.show');
+Route::post('/profile/password', [ProfileController::class, 'updatePassword']);
+Route::post('/profile/notifications', [ProfileController::class, 'updateEmailNotifications']);
 Route::get('/profile/portfolio','App\Http\Controllers\ProfileController@p_show');
 Route::post('/portfolio/add', 'App\Http\Controllers\ProfileController@p_add');
 Route::get('/portfolio/attachment/{portfolio}', [ProfileController::class, 'portfolioFile'])

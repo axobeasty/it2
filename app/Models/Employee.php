@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 
 class Employee extends Model
 {
+    protected function casts(): array
+    {
+        return [
+            'email_notifications' => 'boolean',
+        ];
+    }
+
     public function role()
     {
         return $this->belongsTo(Roles::class, 'role_id');

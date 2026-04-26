@@ -188,8 +188,10 @@ class AuthController extends Controller
                 if(Hash::check($password,$user->password)){
                     $request->session()->put('user',$user);
                     Toastr::success('Успешно', 'Авторизация прошла успешно!', ["progressBar"=> true]);
-                    $email = new Email();
-                    $email->send('Успешная авторизация в системе','Ваша авторизация в системе успешна. Желаем Вам продуктивной работы ;)',$user->email,$settings->title);
+                    if ($user->email_notifications ?? true) {
+                        $email = new Email();
+                        $email->send('Успешная авторизация в системе','Ваша авторизация в системе успешна. Желаем Вам продуктивной работы ;)',$user->email,$settings->title);
+                    }
                     return redirect('/dashboard');
                 }else{
                     Toastr::error('Ошибка авторизации', 'Логин или пароль введены неверно!', ["progressBar"=> true]);

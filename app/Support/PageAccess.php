@@ -5,7 +5,7 @@ namespace App\Support;
 class PageAccess
 {
     public const MAP = [
-        'dashboard' => ['/', '/dashboard', '/profile'],
+        'dashboard' => ['/', '/dashboard', '/profile', '/profile/password', '/profile/notifications'],
         'orders_my' => ['/orders', '/orders/my', '/orders/create', '/orders/{id}/status/set/{code}'],
         'orders_admin' => ['/orders/administration', '/orders/categories', '/orders/categories/create', '/orders/categories/delete/{id}'],
         'inventory_my' => ['/inv'],

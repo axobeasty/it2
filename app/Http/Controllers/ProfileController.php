@@ -2,28 +2,91 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
 use App\Models\Portfolio;
 use App\Models\PortfolioRoles;
 use App\Models\PortfolioTypes;
 use App\Models\Settings;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class ProfileController extends Controller
 {
-    public function show(Request $request){
-        $user = $request->session()->get('user');
-        $settings = Settings::where('id',1)->first();
+    public function show(Request $request)
+    {
+        $sessionUser = $request->session()->get('user');
+        $settings = Settings::where('id', 1)->first();
         $portfolios = Portfolio::all();
-        $portfolioTypes = portfolioTypes::all();
+        $portfolioTypes = PortfolioTypes::all();
 
-        if($user){
-            return view('dashboard.profile', compact('user', 'settings', 'portfolios','portfolioTypes'));
-        }else{
+        if (! $sessionUser) {
             return redirect('/');
-         }
-     }
+        }
+
+        $user = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
+            ->findOrFail($sessionUser->id);
+        $request->session()->put('user', $user);
+
+        return view('dashboard.profile', compact('user', 'settings', 'portfolios', 'portfolioTypes'));
+    }
+
+    public function updatePassword(Request $request)
+    {
+        $sessionUser = $request->session()->get('user');
+        if (! $sessionUser) {
+            return redirect('/');
+        }
+
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $employee = Employee::findOrFail($sessionUser->id);
+
+        if (! Hash::check($validated['current_password'], $employee->password)) {
+            Toastr::error('Текущий пароль указан неверно.', 'Ошибка', ['progressBar' => true]);
+
+            return redirect()->back();
+        }
+
+        $employee->password = Hash::make($validated['password']);
+        $employee->save();
+
+        $fresh = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
+            ->findOrFail($employee->id);
+        $request->session()->put('user', $fresh);
+        $request->session()->put('user_permissions_refreshed_at', time());
+
+        Toastr::success('Пароль успешно изменён.', 'Готово', ['progressBar' => true]);
+
+        return redirect()->back();
+    }
+
+    public function updateEmailNotifications(Request $request)
+    {
+        $sessionUser = $request->session()->get('user');
+        if (! $sessionUser) {
+            return redirect('/');
+        }
+
+        $receive = $request->boolean('email_notifications');
+
+        $employee = Employee::findOrFail($sessionUser->id);
+        $employee->email_notifications = $receive;
+        $employee->save();
+
+        $fresh = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
+            ->findOrFail($employee->id);
+        $request->session()->put('user', $fresh);
+        $request->session()->put('user_permissions_refreshed_at', time());
+
+        Toastr::success('Настройки уведомлений сохранены.', 'Готово', ['progressBar' => true]);
+
+        return redirect()->back();
+    }
 
     public function p_add(Request $request)
     {

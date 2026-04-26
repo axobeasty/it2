@@ -362,43 +362,54 @@
                     <!-- Вкладка: Безопасность -->
                     <div class="tab-pane fade" id="security" role="tabpanel" aria-labelledby="security-tab">
                         <div class="section-card">
-                            <div class="list-group list-group-flush">
-                                <a href="#" class="list-group-item list-group-item-action">
-                                    <i class="bi bi-key me-2 text-primary"></i> Сменить пароль
-                                </a>
-                                <a href="#" class="list-group-item list-group-item-action text-danger">
-                                    <i class="bi bi-box-arrow-right me-2"></i> Выход со всех устройств
-                                </a>
-                            </div>
+                            <h6 class="section-title mb-3">Смена пароля</h6>
+                            <form action="/profile/password" method="post" class="row g-3">
+                                @csrf
+                                <div class="col-12 col-md-6">
+                                    <label for="current_password" class="form-label">Текущий пароль</label>
+                                    <input type="password" class="form-control @error('current_password') is-invalid @enderror" id="current_password" name="current_password" required autocomplete="current-password">
+                                    @error('current_password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                                <div class="col-12 col-md-6 d-none d-md-block"></div>
+                                <div class="col-12 col-md-6">
+                                    <label for="password" class="form-label">Новый пароль</label>
+                                    <input type="password" class="form-control @error('password') is-invalid @enderror" id="password" name="password" required autocomplete="new-password" minlength="8">
+                                    @error('password')
+                                        <div class="invalid-feedback">{{ $message }}</div>
+                                    @enderror
+                                    <div class="form-text">Не менее 8 символов.</div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label for="password_confirmation" class="form-label">Подтверждение пароля</label>
+                                    <input type="password" class="form-control" id="password_confirmation" name="password_confirmation" required autocomplete="new-password" minlength="8">
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-gradient">
+                                        <i class="bi bi-key-fill me-1"></i> Сохранить новый пароль
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                     <!-- Вкладка: Уведомления -->
                     <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">
                         <div class="section-card">
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" value="" id="emailNotifications" checked>
-                                <label class="form-check-label" for="emailNotifications">
-                                    Получать уведомления по email
-                                </label>
-                            </div>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" value="" id="pushNotifications">
-                                <label class="form-check-label" for="pushNotifications">
-                                    Получать push-уведомления
-                                </label>
-                            </div>
-                            <div class="form-check mb-2">
-                                <input class="form-check-input" type="checkbox" value="" id="taskUpdates" checked>
-                                <label class="form-check-label" for="taskUpdates">
-                                    Обновления по задачам
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="" id="weeklyDigest">
-                                <label class="form-check-label" for="weeklyDigest">
-                                    Еженедельный отчёт
-                                </label>
-                            </div>
+                            <form action="/profile/notifications" method="post" class="d-flex flex-column gap-3">
+                                @csrf
+                                <input type="hidden" name="email_notifications" value="0">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="email_notifications" value="1" id="emailNotifications"
+                                           {{ old('email_notifications', $user->email_notifications ?? true) ? 'checked' : '' }}>
+                                    <label class="form-check-label" for="emailNotifications">
+                                        Получать уведомления по email
+                                    </label>
+                                </div>
+                                <div>
+                                    <button type="submit" class="btn btn-gradient btn-sm">Сохранить</button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 </div>
