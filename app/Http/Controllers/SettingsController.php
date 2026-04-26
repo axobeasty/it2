@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MailDeliveryFailure;
 use App\Models\Settings;
 use App\Support\DatabaseProfileManager;
 use App\Support\DeployVersion;
@@ -744,7 +745,12 @@ class SettingsController extends Controller
             $user = $request->session()->get('user');
             $settings = Settings::where('id',1)->first();
             if($user->canAccessPage('settings')){
-                return view('settings.email',compact('user','settings'));
+                $mailFailureTree = $this->buildMailFailureTree();
+                $mailFailureTotal = Schema::hasTable('mail_delivery_failures')
+                    ? MailDeliveryFailure::query()->count()
+                    : 0;
+
+                return view('settings.email', compact('user', 'settings', 'mailFailureTree', 'mailFailureTotal'));
             }else{
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
                 return redirect('/');
@@ -761,6 +767,77 @@ class SettingsController extends Controller
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'X-Accel-Buffering' => 'no',
         ];
+    }
+
+    /**
+     * Дерево: категория → получатель → список записей (новые сверху внутри категории).
+     *
+     * @return array<string, array{label: string, recipients: array<string, mixed>}>
+     */
+    private function buildMailFailureTree(): array
+    {
+        if (! Schema::hasTable('mail_delivery_failures')) {
+            return [];
+        }
+
+        $rows = MailDeliveryFailure::query()
+            ->orderByDesc('created_at')
+            ->limit(400)
+            ->get();
+
+        $order = [
+            MailDeliveryFailure::CATEGORY_AUTH,
+            MailDeliveryFailure::CATEGORY_EMPLOYEES,
+            MailDeliveryFailure::CATEGORY_INVENTORY,
+            MailDeliveryFailure::CATEGORY_SYSTEM,
+        ];
+
+        $tree = [];
+        foreach ($order as $category) {
+            $tree[$category] = [
+                'label' => MailDeliveryFailure::categoryLabel($category),
+                'recipients' => [],
+            ];
+        }
+
+        foreach ($rows as $row) {
+            $category = $row->category;
+            if (! isset($tree[$category])) {
+                $tree[$category] = [
+                    'label' => MailDeliveryFailure::categoryLabel($category),
+                    'recipients' => [],
+                ];
+            }
+            $recKey = (string) ($row->recipient_employee_id ?? '0').'|'.mb_strtolower((string) $row->recipient_email);
+            if (! isset($tree[$category]['recipients'][$recKey])) {
+                $display = $row->recipient_display;
+                if ($display === null || $display === '') {
+                    $display = $row->recipient_email !== ''
+                        ? $row->recipient_email
+                        : ($row->recipient_employee_id ? 'Сотрудник #'.$row->recipient_employee_id : 'Неизвестный получатель');
+                }
+                $tree[$category]['recipients'][$recKey] = [
+                    'display' => $display,
+                    'email' => $row->recipient_email,
+                    'items' => collect(),
+                ];
+            }
+            $tree[$category]['recipients'][$recKey]['items']->push($row);
+        }
+
+        $ordered = [];
+        foreach ($order as $category) {
+            if (isset($tree[$category]) && $tree[$category]['recipients'] !== []) {
+                $ordered[$category] = $tree[$category];
+            }
+        }
+        foreach ($tree as $category => $data) {
+            if (! isset($ordered[$category]) && $data['recipients'] !== []) {
+                $ordered[$category] = $data;
+            }
+        }
+
+        return $ordered;
     }
 
     public function checkGitUpdates(Request $request)

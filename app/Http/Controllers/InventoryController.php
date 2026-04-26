@@ -7,6 +7,7 @@ use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Inv_Type;
 use App\Models\InvNumbers;
+use App\Models\MailDeliveryFailure;
 use App\Models\Notifs;
 use App\Models\O_Categories;
 use App\Models\Settings;
@@ -14,8 +15,6 @@ use App\Models\Store;
 use Brian2694\Toastr\Facades\Toastr;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Throwable;
-
 class InventoryController extends Controller
 {
     public function index(Request $request){
@@ -140,7 +139,9 @@ class InventoryController extends Controller
                 $employee,
                 'За вами закрепили инвентарь',
                 'За вами закрепили следующий инвентарь:',
-                $assignedItems ?? []
+                $assignedItems ?? [],
+                (int) $user->id,
+                'inventory_assign'
             );
             $this->createInventorySiteNotification(
                 $employee->id,
@@ -175,7 +176,9 @@ class InventoryController extends Controller
                     'name' => $invNumber->store->name ?? 'Без названия',
                     'number' => $invNumber->number ?? '',
                     'room' => $invNumber->room ?? '',
-                ]]
+                ]],
+                (int) $user->id,
+                'inventory_unassign'
             );
             $this->createInventorySiteNotification(
                 $employee->id,
@@ -232,7 +235,9 @@ class InventoryController extends Controller
             $employee,
             'От вас открепили инвентарь',
             'От вас открепили следующий инвентарь:',
-            $unassignedItems
+            $unassignedItems,
+            (int) $user->id,
+            'inventory_unassign_all'
         );
 
         $this->createInventorySiteNotification(
@@ -272,7 +277,9 @@ class InventoryController extends Controller
                     'name' => $invNumber->store->name ?? 'Без названия',
                     'number' => $invNumber->number ?? '',
                     'room' => $invNumber->room ?? '',
-                ]]
+                ]],
+                (int) $user->id,
+                'inventory_reassign'
             );
             $this->createInventorySiteNotification(
                 $invNumber->employee->id,
@@ -289,13 +296,8 @@ class InventoryController extends Controller
         return redirect('/inv/manage');
     }
 
-    private function sendInventoryEmail(Employee $employee, string $title, string $intro, array $items): void
+    private function sendInventoryEmail(Employee $employee, string $title, string $intro, array $items, ?int $triggeredByEmployeeId, string $mailType): void
     {
-        $address = trim((string) ($employee->email ?? ''));
-        if ($address === '') {
-            return;
-        }
-
         $rows = '';
         foreach ($items as $index => $item) {
             $name = e((string) ($item['name'] ?? 'Без названия'));
@@ -306,12 +308,19 @@ class InventoryController extends Controller
 
         $body = 'Здравствуйте, '.$employee->fio.'!<br><br>'.$intro.'<br><ul>'.$rows.'</ul>';
 
-        try {
-            $email = new Email();
-            $email->send($title, $body, $address, 'IT-Master');
-        } catch (Throwable $e) {
-            // Не прерываем бизнес-операцию из-за проблем с почтой.
-        }
+        $address = trim((string) ($employee->email ?? ''));
+        $email = new Email();
+        $email->send($title, $body, $address, 'IT-Master', [
+            'category' => MailDeliveryFailure::CATEGORY_INVENTORY,
+            'mail_type' => $mailType,
+            'recipient_employee_id' => $employee->id,
+            'recipient_name' => $employee->fio,
+            'triggered_by_employee_id' => $triggeredByEmployeeId,
+            'meta' => [
+                'intro' => $intro,
+                'items_count' => count($items),
+            ],
+        ]);
     }
 
     private function createInventorySiteNotification(int $employeeId, string $title, string $message): void

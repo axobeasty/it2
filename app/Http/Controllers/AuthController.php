@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Email\Email;
+use App\Models\MailDeliveryFailure;
 use App\Models\Employee;
 use App\Models\GroupScheduleEntry;
 use App\Models\Notifs;
@@ -14,7 +15,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Log;
 use Nutgram\Laravel\Facades\Telegram;
-use PHPMailer\PHPMailer\PHPMailer;
 use function Laravel\Prompts\error;
 use Jenssegers\Date\Date;
 
@@ -222,7 +222,6 @@ class AuthController extends Controller
                 if(Hash::check($password,$user->password)){
                     $request->session()->put('user',$user);
                     Toastr::success('Успешно', 'Авторизация прошла успешно!', ["progressBar"=> true]);
-                    $email = new Email();
                     return redirect('/dashboard');
                 }else{
                     Toastr::error('Ошибка авторизации', 'Логин или пароль введены неверно!', ["progressBar"=> true]);
@@ -245,7 +244,13 @@ class AuthController extends Controller
                     Toastr::success('Успешно', 'Авторизация прошла успешно!', ["progressBar"=> true]);
                     if ($user->email_notifications ?? true) {
                         $email = new Email();
-                        $email->send('Успешная авторизация в системе','Ваша авторизация в системе успешна. Желаем Вам продуктивной работы ;)',$user->email,$settings->title);
+                        $email->send('Успешная авторизация в системе','Ваша авторизация в системе успешна. Желаем Вам продуктивной работы ;)',$user->email,$settings->title, [
+                            'category' => MailDeliveryFailure::CATEGORY_AUTH,
+                            'mail_type' => 'login_success',
+                            'recipient_employee_id' => $user->id,
+                            'recipient_name' => $user->fio,
+                            'triggered_by_employee_id' => $user->id,
+                        ]);
                     }
                     return redirect('/dashboard');
                 }else{

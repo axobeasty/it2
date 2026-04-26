@@ -109,4 +109,70 @@
             <i class="bi bi-check2 me-1"></i> Сохранить изменения
         </button>
     </form>
+
+    @php
+        $failureTree = $mailFailureTree ?? [];
+        $failureTotal = $mailFailureTotal ?? 0;
+    @endphp
+
+    <div class="settings-section-title mb-3 mt-5">Журнал ошибок доставки</div>
+    <p class="small text-muted mb-3">
+        Записи о неудачных попытках отправки и конфигурационных препятствиях (отключённая почта, нет SMTP и т.д.), сгруппированные по разделу системы и получателю.
+        @if ($failureTotal > 0)
+            Всего записей в базе: <strong>{{ $failureTotal }}</strong>; на экране — до 400 последних.
+        @else
+            Записей пока нет.
+        @endif
+    </p>
+
+    @if (count($failureTree) === 0)
+        <div class="alert alert-light border rounded-3 mb-0">Ошибок доставки не зафиксировано (или таблица журнала ещё не создана — выполните миграции).</div>
+    @else
+        <div class="mail-failure-tree border rounded-3 overflow-hidden">
+            @foreach ($failureTree as $catKey => $catData)
+                <details class="mail-failure-cat border-bottom mb-0" @if ($loop->first) open @endif>
+                    <summary class="px-3 py-2 bg-light fw-semibold user-select-none" style="cursor: pointer;">
+                        {{ $catData['label'] }}
+                        <span class="text-muted fw-normal small">({{ count($catData['recipients']) }} получ.)</span>
+                    </summary>
+                    <div class="ps-3 pe-2 pb-2 pt-1">
+                        @foreach ($catData['recipients'] as $recipientData)
+                            <details class="mb-2" @if ($loop->first && $loop->parent->first) open @endif>
+                                <summary class="small fw-medium py-1 user-select-none" style="cursor: pointer;">
+                                    {{ $recipientData['display'] }}
+                                    @if (!empty($recipientData['email']))
+                                        <span class="text-muted">— {{ $recipientData['email'] }}</span>
+                                    @endif
+                                    <span class="text-muted">({{ $recipientData['items']->count() }})</span>
+                                </summary>
+                                <ul class="list-unstyled small mb-0 ps-2 border-start ms-2">
+                                    @foreach ($recipientData['items'] as $fail)
+                                        <li class="mb-3 pb-2 border-bottom border-light">
+                                            <div class="text-muted">{{ $fail->created_at?->format('d.m.Y H:i:s') }}</div>
+                                            <div><span class="text-muted">Тип:</span> {{ \App\Models\MailDeliveryFailure::mailTypeLabel($fail->mail_type) }}</div>
+                                            <div><span class="text-muted">Тема:</span> {{ $fail->subject }}</div>
+                                            <div><span class="text-muted">Код:</span> {{ \App\Models\MailDeliveryFailure::failureCodeLabel($fail->failure_code) }} <code class="small">{{ $fail->failure_code }}</code></div>
+                                            <div class="mt-1"><span class="text-muted">Сообщение:</span> {{ $fail->error_message }}</div>
+                                            @if (!empty($fail->phpmailer_error_info))
+                                                <div class="mt-1"><span class="text-muted">PHPMailer:</span> <code class="small d-block text-break">{{ $fail->phpmailer_error_info }}</code></div>
+                                            @endif
+                                            @if ($fail->triggered_by_employee_id)
+                                                <div class="mt-1"><span class="text-muted">Инициатор (ID):</span> {{ $fail->triggered_by_employee_id }}</div>
+                                            @endif
+                                            @if (!empty($fail->meta) && is_array($fail->meta))
+                                                <details class="mt-1">
+                                                    <summary class="text-muted" style="cursor: pointer;">Доп. данные</summary>
+                                                    <pre class="small bg-light p-2 rounded mb-0 mt-1 text-break" style="max-height: 12rem; overflow: auto;">{{ json_encode($fail->meta, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) }}</pre>
+                                                </details>
+                                            @endif
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </details>
+                        @endforeach
+                    </div>
+                </details>
+            @endforeach
+        </div>
+    @endif
 @endsection

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Email\Email;
+use App\Models\MailDeliveryFailure;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\Groups;
@@ -79,7 +80,13 @@ class EmployeeController extends Controller
                    $hash = Crypt::encryptString($new->id.$new->login.$new->email);
                    $email->send('Вам создали профиль сотрудника.','Здравствуйте, '.$new->fio.'</b></p>! Технический специалист '.$settings->title.' создал для вам профиль сотрудника в системе. Для начала Вам необходимо активировать свой профиль, перейдя по ссылке:  <a href="http://'.$request->getHost().':'.$request->getPort().'/employees/'.$new->id.'/activate/'.$hash.'">активировать профиль</a>
 </br>Ваши данные:</br> логин:<strong>'.$new->login .'</strong>, пароль:<i>'. $psw.'
-' , $new->email,$settings->title);
+' , $new->email,$settings->title, [
+                       'category' => MailDeliveryFailure::CATEGORY_EMPLOYEES,
+                       'mail_type' => 'employee_invite',
+                       'recipient_employee_id' => $new->id,
+                       'recipient_name' => $new->fio,
+                       'triggered_by_employee_id' => $user->id,
+                   ]);
                    Toastr::success('Профиль сотрудника успешно создан!', 'Успешно.', ["progressBar"=> true]);
 
 
@@ -109,7 +116,13 @@ class EmployeeController extends Controller
                     if(!Employee::where('email','=',$request->input('email'))->exists()){
                         $editer->email = $request->input('email');
                         $email = new Email();
-                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта была изменена почта на '.$request->input('email'). '</br><span class="text-danger">Внимание, если вы не просили смены почты - свяжитель с техническим администратором!</span>',$request->input('email'),$settings->title);
+                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта была изменена почта на '.$request->input('email'). '</br><span class="text-danger">Внимание, если вы не просили смены почты - свяжитель с техническим администратором!</span>',$request->input('email'),$settings->title, [
+                            'category' => MailDeliveryFailure::CATEGORY_EMPLOYEES,
+                            'mail_type' => 'employee_email_change',
+                            'recipient_employee_id' => $editer->id,
+                            'recipient_name' => $editer->fio,
+                            'triggered_by_employee_id' => $user->id,
+                        ]);
                     }else{
                         Toastr::error('Почта '.$request->input('email'). ' уже привязана к пользователю.', 'Не удалось обновить почту пользователя. Проверьте правильность написания указанной почты.', ["progressBar"=> true]);
                     }
@@ -119,7 +132,13 @@ class EmployeeController extends Controller
                     if($request->input('password') != null){
                         $editer->password = Hash::make($request->input('password'));
                         $email = new Email();
-                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта был изменен пароль администратором системы. Новый пароль: '.$request->input('password'),$request->input('email'),$settings->title);
+                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта был изменен пароль администратором системы. Новый пароль: '.$request->input('password'),$request->input('email'),$settings->title, [
+                            'category' => MailDeliveryFailure::CATEGORY_EMPLOYEES,
+                            'mail_type' => 'employee_password_change',
+                            'recipient_employee_id' => $editer->id,
+                            'recipient_name' => $editer->fio,
+                            'triggered_by_employee_id' => $user->id,
+                        ]);
                     }
                     $editer->room = $request->input('room');
                     $editer->active = $request->boolean('active') ? 1 : 0;
@@ -134,7 +153,13 @@ class EmployeeController extends Controller
                     if(!Employee::where('email','=',$request->input('email'))->exists()){
                         $editer->email = $request->input('email');
                         $email = new Email();
-                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта была изменена почта на '.$request->input('email'). '</br><span class="text-danger">Внимание, если вы не просили смены почты - свяжитель с техническим администратором!</span>',$request->input('email'),$settings->title);
+                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта была изменена почта на '.$request->input('email'). '</br><span class="text-danger">Внимание, если вы не просили смены почты - свяжитель с техническим администратором!</span>',$request->input('email'),$settings->title, [
+                            'category' => MailDeliveryFailure::CATEGORY_EMPLOYEES,
+                            'mail_type' => 'employee_email_change',
+                            'recipient_employee_id' => $editer->id,
+                            'recipient_name' => $editer->fio,
+                            'triggered_by_employee_id' => $user->id,
+                        ]);
                     }else{
                         Toastr::error('Почта '.$request->input('email'). ' уже привязана к пользователю.', 'Не удалось обновить почту пользователя. Проверьте правильность написания указанной почты.', ["progressBar"=> true]);
                     }
@@ -143,7 +168,13 @@ class EmployeeController extends Controller
                     if($request->input('password') != null){
                         $editer->password = Hash::make($request->input('password'));
                         $email = new Email();
-                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта был изменен пароль администратором системы. Новый пароль: '.$request->input('password'),$request->input('email'),$settings->title);
+                        $email->send('Изменение данных аккаунта','Для Вашего аккаунта был изменен пароль администратором системы. Новый пароль: '.$request->input('password'),$request->input('email'),$settings->title, [
+                            'category' => MailDeliveryFailure::CATEGORY_EMPLOYEES,
+                            'mail_type' => 'employee_password_change',
+                            'recipient_employee_id' => $editer->id,
+                            'recipient_name' => $editer->fio,
+                            'triggered_by_employee_id' => $user->id,
+                        ]);
                     }
                     $editer->room = $request->input('room');
                     $editer->active = $request->boolean('active') ? 1 : 0;
