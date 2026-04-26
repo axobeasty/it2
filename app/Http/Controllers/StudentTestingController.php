@@ -11,12 +11,12 @@ use App\Models\Test;
 use App\Models\TestAttempt;
 use App\Models\TestGroupAssignment;
 use App\Models\TestQuestion;
+use App\Support\TestSubmissionNotifier;
 use App\Support\TestGrading;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class StudentTestingController extends Controller
 {
@@ -126,7 +126,7 @@ class StudentTestingController extends Controller
             'answers_json' => json_encode($answers, JSON_UNESCAPED_UNICODE),
         ]);
 
-        $this->notifyStaffAboutGroupTestSubmission($user, $test, $attempt);
+        TestSubmissionNotifier::notifyStaffAboutGroupTestSubmission($user, $test, $attempt);
 
         $isAutoSubmitted = $request->boolean('auto_submitted');
         $messagePrefix = $isAutoSubmitted ? 'Время вышло. Тест отправлен автоматически.' : 'Тест отправлен.';
@@ -262,7 +262,9 @@ class StudentTestingController extends Controller
 
     public function update(Request $request, int $id)
     {
-        $test = Test::findOrFail($id);
+        $user = $request->session()->get('user');
+        $test = Test::with('assignments')->findOrFail($id);
+        $oldGroupIds = $test->assignments->pluck('group_id')->map(fn ($gid) => (int) $gid)->unique()->values()->all();
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -307,6 +309,13 @@ class StudentTestingController extends Controller
                 ]);
             }
         });
+
+        $newGroupIds = array_values(array_unique(array_map('intval', (array) $request->input('group_ids', []))));
+        $addedGroupIds = array_values(array_diff($newGroupIds, $oldGroupIds));
+        if ($addedGroupIds !== [] && $user) {
+            $test->refresh();
+            $this->notifyStudentsAboutAssignedTest($user, $test, $addedGroupIds);
+        }
 
         Toastr::success('Успешно', 'Тест обновлён', ["progressBar" => true]);
         return redirect('/tests/admin');
@@ -720,45 +729,6 @@ class StudentTestingController extends Controller
             ->all();
 
         foreach ($studentIds as $employeeId) {
-            Notifs::create([
-                'title' => $title,
-                'message' => $message,
-                'employee_id' => $employeeId,
-            ]);
-        }
-    }
-
-    /**
-     * Уведомления на главной для сотрудников с правами администрирования / статистики тестов.
-     */
-    private function notifyStaffAboutGroupTestSubmission($student, Test $test, TestAttempt $attempt): void
-    {
-        $groupName = Groups::find($student->group_id)?->name ?? 'без группы';
-        $gradeLabel = TestGrading::labelRu((string) $attempt->grade);
-        $title = 'Тест группы сдан';
-        $message = sprintf(
-            '%s (гр. «%s») завершил тест «%s»: %s/%s балл., %s%%, оц. %s (%s).',
-            $student->fio,
-            $groupName,
-            $test->title,
-            (string) $attempt->score,
-            (string) $attempt->max_score,
-            (string) $attempt->percentage,
-            (string) $attempt->grade,
-            $gradeLabel
-        );
-        $message = Str::limit($message, 250);
-
-        $recipientIds = Employee::query()
-            ->whereHas('role.pagePermissions', function ($q) {
-                $q->whereIn('page_key', ['tests_admin', 'tests_stats']);
-            })
-            ->where('id', '!=', (int) $student->id)
-            ->pluck('id')
-            ->unique()
-            ->all();
-
-        foreach ($recipientIds as $employeeId) {
             Notifs::create([
                 'title' => $title,
                 'message' => $message,
