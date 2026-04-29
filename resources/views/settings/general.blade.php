@@ -525,7 +525,7 @@
                 return;
             }
 
-            logLine('Запрос: POST /settings/git/pull-updates (git pull --ff-only)');
+            logLine('Запрос: POST /settings/git/pull-updates (git pull --ff-only, затем php artisan migrate --force)');
             setProgress(62, { striped: true });
             let pull;
             try {
@@ -573,6 +573,14 @@
                     }
                 });
             }
+            if (pull.migrate_output) {
+                logLine('Вывод php artisan migrate --force:');
+                String(pull.migrate_output).split(/\r?\n/).forEach(function (ln) {
+                    if (ln.length) {
+                        logLine('  ' + ln);
+                    }
+                });
+            }
             logLine('Готово.');
             await runDeployCheckPreview({ fillStatus: false });
             setStatus(pull.message || 'Обновления успешно скачаны и применены.', false);
@@ -583,6 +591,22 @@
             logLine('Ошибка: ' + msg);
             if (error.payload && error.payload.code) {
                 logLine('Код: ' + error.payload.code);
+            }
+            if (error.payload && error.payload.git_pull_output) {
+                logLine('Вывод git до ошибки migrate:');
+                String(error.payload.git_pull_output).split(/\r?\n/).forEach(function (ln) {
+                    if (ln.length) {
+                        logLine('  ' + ln);
+                    }
+                });
+            }
+            if (error.payload && error.payload.migrate_output) {
+                logLine('Вывод php artisan migrate --force:');
+                String(error.payload.migrate_output).split(/\r?\n/).forEach(function (ln) {
+                    if (ln.length) {
+                        logLine('  ' + ln);
+                    }
+                });
             }
             if (error.status) {
                 logLine('HTTP: ' + error.status);

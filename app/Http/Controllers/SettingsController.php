@@ -1037,11 +1037,39 @@ class SettingsController extends Controller
             $headSha = trim($this->runGitProcess(['git', 'rev-parse', 'HEAD'], $basePath)->getOutput());
             $persist = DeployVersion::tryPersistDeployRef($basePath, $headSha);
 
+            try {
+                $migrateProcess = $this->runArtisanProcess(['migrate', '--force'], $basePath);
+                $migrateOutput = trim($migrateProcess->getOutput()."\n".$migrateProcess->getErrorOutput());
+            } catch (ProcessFailedException $migrateException) {
+                $failed = $migrateException->getProcess();
+                $migrateOutput = trim($failed->getOutput()."\n".$failed->getErrorOutput());
+                Log::error('migrate after git pull failed', ['output' => $migrateOutput]);
+
+                if ($didStash) {
+                    $pop = new Process(['git', 'stash', 'pop'], $basePath, null, null, 120);
+                    $pop->run();
+                    if (! $pop->isSuccessful()) {
+                        $migrateOutput .= "\n\n(stash pop после ошибки migrate: ".trim($pop->getErrorOutput()."\n".$pop->getOutput()).')';
+                    }
+                }
+
+                return response()->json(array_merge([
+                    'ok' => false,
+                    'code' => 'migrate_failed',
+                    'message' => 'Код обновлён (git pull выполнен), но php artisan migrate --force завершился с ошибкой. Проверьте вывод ниже и выполните миграции вручную по SSH при необходимости.',
+                    'git_pull_output' => trim($pullProcess->getOutput()),
+                    'migrate_output' => $migrateOutput,
+                    'deploy_ref_saved' => $persist['saved'],
+                    'current_ref' => $persist['saved'] ? $persist['ref'] : ($headSha !== '' ? $headSha : null),
+                ], $this->gitReleaseJsonFragment()), 422);
+            }
+
             $payload = [
                 'ok' => true,
                 'updated' => true,
-                'message' => 'Обновления успешно скачаны и применены.',
+                'message' => 'Обновления успешно скачаны и применены. Миграции БД выполнены.',
                 'output' => trim($pullProcess->getOutput()),
+                'migrate_output' => $migrateOutput !== '' ? $migrateOutput : null,
                 'deploy_ref_saved' => $persist['saved'],
                 'current_ref' => $persist['saved'] ? $persist['ref'] : ($headSha !== '' ? $headSha : null),
             ];
@@ -1049,7 +1077,7 @@ class SettingsController extends Controller
                 $payload['message'] .= ' Метка в storage/app/deploy.json обновлена на '.substr($persist['ref'], 0, 7).'.';
             } elseif ($persist['skipped_env']) {
                 $payload['deploy_ref_note'] = 'deploy.json не меняли: задан DEPLOY_GIT_REF в .env (он важнее файла).';
-            } else            if ($persist['error'] !== null) {
+            } elseif ($persist['error'] !== null) {
                 $payload['deploy_ref_note'] = 'Не удалось обновить deploy.json: '.$persist['error'];
             }
 
@@ -1370,6 +1398,43 @@ class SettingsController extends Controller
         }
 
         return $process;
+    }
+
+    /**
+     * PHP для запуска artisan из HTTP-запроса: задайте PHP_CLI в .env, если в PATH нет нужного php (например php-fpm).
+     *
+     * @param  list<string>  $artisanArgs  аргументы после «artisan» (например ['migrate', '--force'])
+     */
+    private function runArtisanProcess(array $artisanArgs, string $cwd): Process
+    {
+        $php = $this->resolvePhpBinaryForArtisan();
+        $command = array_merge([$php, base_path('artisan')], $artisanArgs);
+        $process = new Process($command, $cwd, null, null, 300);
+        $process->run();
+
+        if (! $process->isSuccessful()) {
+            throw new ProcessFailedException($process);
+        }
+
+        return $process;
+    }
+
+    private function resolvePhpBinaryForArtisan(): string
+    {
+        $fromEnv = trim((string) env('PHP_CLI', ''));
+        if ($fromEnv !== '') {
+            return $fromEnv;
+        }
+
+        if (PHP_BINARY !== '') {
+            $normalized = str_replace('\\', '/', PHP_BINARY);
+            $base = strtolower(basename($normalized));
+            if (! str_contains($base, 'php-fpm') && ! str_contains($base, 'fpm')) {
+                return PHP_BINARY;
+            }
+        }
+
+        return 'php';
     }
 
     /**
