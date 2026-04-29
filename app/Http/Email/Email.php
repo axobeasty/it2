@@ -131,13 +131,19 @@ class Email
             }
             $mail->Port = $port;
 
+            $allowInsecureTls = (bool) config('mail.smtp_allow_insecure_tls', false);
             $mail->SMTPOptions = [
                 'ssl' => [
-                    'verify_peer' => false,
-                    'verify_peer_name' => false,
-                    'allow_self_signed' => true,
+                    'verify_peer' => ! $allowInsecureTls,
+                    'verify_peer_name' => ! $allowInsecureTls,
+                    'allow_self_signed' => $allowInsecureTls,
                 ],
             ];
+            if ($allowInsecureTls) {
+                Log::channel('mail')->warning(
+                    'SMTP TLS verification is disabled by config (MAIL_SMTP_ALLOW_INSECURE_TLS=true).'
+                );
+            }
 
             $fromAddr = trim((string) ($settings->mail_from_address ?? ''));
             $fromName = trim((string) ($settings->mail_from_name ?? ''));

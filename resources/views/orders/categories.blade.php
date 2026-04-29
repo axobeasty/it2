@@ -135,9 +135,13 @@
                                             <td class="text-end btn-actions">
                                                 <div class="btn-group" role="group">
                                                    @if($category->id  != 1)
-                                                        <a href="/orders/categories/delete/{{ $category->id }}" class="btn btn-outline-danger btn-sm">
-                                                            <i class="bi bi-trash"></i>
-                                                        </a>
+                                                        <form action="/orders/categories/delete/{{ $category->id }}" method="post" class="d-inline">
+                                                            @csrf
+                                                            @method('DELETE')
+                                                            <button type="submit" class="btn btn-outline-danger btn-sm">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        </form>
                                                    @endif
                                                 </div>
                                             </td>

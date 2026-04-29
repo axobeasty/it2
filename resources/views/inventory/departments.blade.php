@@ -210,9 +210,13 @@
                                             </td>
                                             <td class="text-center">
                                                 @if($depart->id != 1)
-                                                    <a href="/inv/departments/delete/{{$depart->id}}" class="text-decoration-none fw-bold btn btn-outline-danger btn-sm">
-                                                        <i class="bi bi-trash"></i>
-                                                    </a>
+                                                    <form action="/inv/departments/delete/{{$depart->id}}" method="post" class="d-inline">
+                                                        @csrf
+                                                        @method('DELETE')
+                                                        <button type="submit" class="text-decoration-none fw-bold btn btn-outline-danger btn-sm">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </form>
                                                 @endif
 
                                             </td>

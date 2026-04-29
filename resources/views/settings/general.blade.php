@@ -21,14 +21,22 @@
                     <label class="settings-field-label d-block">Техническое обслуживание</label>
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         @if($settings->is_enabled == 1)
-                            <a href="/settings/general/site/disable" class="btn btn-outline-danger rounded-pill px-4">
-                                <i class="bi bi-power me-1"></i> Выключить сайт
-                            </a>
+                            <form action="/settings/general/site/disable" method="post" class="d-inline">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="btn btn-outline-danger rounded-pill px-4">
+                                    <i class="bi bi-power me-1"></i> Выключить сайт
+                                </button>
+                            </form>
                             <span class="small text-success"><i class="bi bi-check-circle-fill me-1"></i>Сайт открыт для пользователей</span>
                         @else
-                            <a href="/settings/general/site/enable" class="btn btn-success rounded-pill px-4">
-                                <i class="bi bi-play-fill me-1"></i> Включить сайт
-                            </a>
+                            <form action="/settings/general/site/enable" method="post" class="d-inline">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="btn btn-success rounded-pill px-4">
+                                    <i class="bi bi-play-fill me-1"></i> Включить сайт
+                                </button>
+                            </form>
                             <span class="small text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>Сайт в режиме обслуживания</span>
                         @endif
                     </div>

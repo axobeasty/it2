@@ -24,7 +24,11 @@
                     <td>{{ $chair->faculty->name ?? '—' }}</td>
                     <td class="text-end">
                         <button class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#editChair{{ $chair->id }}">Редактировать</button>
-                        <a href="/teachers/chairs/{{ $chair->id }}/delete" class="btn btn-outline-danger btn-sm">Удалить</a>
+                        <form action="/teachers/chairs/{{ $chair->id }}/delete" method="post" class="d-inline">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Удалить</button>
+                        </form>
                     </td>
                 </tr>
                 <div class="modal fade" id="editChair{{ $chair->id }}" tabindex="-1" aria-hidden="true">

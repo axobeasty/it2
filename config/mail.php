@@ -115,4 +115,16 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | SMTP TLS Security Policy
+    |--------------------------------------------------------------------------
+    |
+    | By default, TLS certificate checks are strict (recommended for production).
+    | Set MAIL_SMTP_ALLOW_INSECURE_TLS=true only as a temporary workaround
+    | for broken/self-signed SMTP certs in non-production environments.
+    |
+    */
+    'smtp_allow_insecure_tls' => env('MAIL_SMTP_ALLOW_INSECURE_TLS', false),
+
 ];

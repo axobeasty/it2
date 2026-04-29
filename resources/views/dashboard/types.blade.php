@@ -180,7 +180,11 @@
                                                                 </div>
                                                                 <div class="modal-footer">
                                                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отменить</button>
-                                                                    <a href="/portfolio/types/{{$type->id}}/delete"  class="btn btn-danger">Удалить</a>
+                                                                    <form action="/portfolio/types/{{$type->id}}/delete" method="post" class="d-inline">
+                                                                        @csrf
+                                                                        @method('DELETE')
+                                                                        <button type="submit" class="btn btn-danger">Удалить</button>
+                                                                    </form>
                                                                 </div>
                                                             </div>
                                                         </div>

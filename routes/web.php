@@ -20,7 +20,7 @@ Route::get('/','App\Http\Controllers\AuthController@auth');
 //Route::get('/test','App\Http\Controllers\TestController@test');
 Route::get('/logout','App\Http\Controllers\AuthController@logout');
 Route::get('/auth','App\Http\Controllers\AuthController@notallowed');
-Route::post('/auth','App\Http\Controllers\AuthController@login');
+Route::post('/auth','App\Http\Controllers\AuthController@login')->middleware('throttle:login-web');
 Route::get('/employees/{id}/activate/{code}','App\Http\Controllers\EmployeeController@activateEmployee');
 
 Route::get('/password/forgot', [PasswordResetController::class, 'showForgotForm'])->name('password.forgot');
@@ -34,53 +34,53 @@ Route::get('/teachers','App\Http\Controllers\AuthController@teacher');
 Route::get('/teachers/faculties', [AcademicStructureController::class, 'faculties']);
 Route::post('/teachers/faculties/create', [AcademicStructureController::class, 'facultiesCreate']);
 Route::post('/teachers/faculties/{id}/edit', [AcademicStructureController::class, 'facultiesEdit']);
-Route::get('/teachers/faculties/{id}/delete', [AcademicStructureController::class, 'facultiesDelete']);
+Route::delete('/teachers/faculties/{id}/delete', [AcademicStructureController::class, 'facultiesDelete']);
 Route::get('/teachers/chairs', [AcademicStructureController::class, 'chairs']);
 Route::post('/teachers/chairs/create', [AcademicStructureController::class, 'chairsCreate']);
 Route::post('/teachers/chairs/{id}/edit', [AcademicStructureController::class, 'chairsEdit']);
-Route::get('/teachers/chairs/{id}/delete', [AcademicStructureController::class, 'chairsDelete']);
+Route::delete('/teachers/chairs/{id}/delete', [AcademicStructureController::class, 'chairsDelete']);
 Route::get('/students','App\Http\Controllers\AuthController@student');
 
 Route::get('/employees','App\Http\Controllers\EmployeeController@index');
 Route::post('/employees/new','App\Http\Controllers\EmployeeController@newEmployee');
 Route::get('/employees/new','App\Http\Controllers\EmployeeController@notallowed');
-Route::get('/employees/delete/{id}','App\Http\Controllers\EmployeeController@delete');
+Route::delete('/employees/delete/{id}','App\Http\Controllers\EmployeeController@delete');
 Route::post('/employees/edit/{id}','App\Http\Controllers\EmployeeController@edit');
 Route::get('/employees/edit/{id}','App\Http\Controllers\EmployeeController@notallowed');
-Route::get('/employees/deactivate/{id}','App\Http\Controllers\EmployeeController@deactivate');
-Route::get('/employees/activate/{id}','App\Http\Controllers\EmployeeController@activate');
+Route::patch('/employees/deactivate/{id}','App\Http\Controllers\EmployeeController@deactivate');
+Route::patch('/employees/activate/{id}','App\Http\Controllers\EmployeeController@activate');
 
 Route::get('/roles', [RoleController::class, 'index']);
 Route::post('/roles/create', [RoleController::class, 'create']);
 Route::post('/roles/{id}/edit', [RoleController::class, 'update']);
-Route::get('/roles/{id}/delete', [RoleController::class, 'delete']);
+Route::delete('/roles/{id}/delete', [RoleController::class, 'delete']);
 Route::get('/groups', [GroupController::class, 'index']);
 Route::post('/groups/create', [GroupController::class, 'create']);
 Route::post('/groups/{id}/edit', [GroupController::class, 'update']);
-Route::get('/groups/{id}/delete', [GroupController::class, 'delete']);
+Route::delete('/groups/{id}/delete', [GroupController::class, 'delete']);
 Route::get('/groups/{id}/print-students', [GroupController::class, 'printStudents']);
 Route::post('/groups/{id}/assign-students', [GroupController::class, 'assignStudents']);
-Route::get('/groups/students/{id}/detach', [GroupController::class, 'detachStudent']);
+Route::delete('/groups/students/{id}/detach', [GroupController::class, 'detachStudent']);
 
 Route::get('/schedule', [GroupScheduleController::class, 'mySchedule'])->name('schedule.my');
 Route::get('/schedule/teacher', [GroupScheduleController::class, 'teacherSchedule'])->name('schedule.teacher');
 Route::get('/schedule/constructor', [GroupScheduleController::class, 'constructor'])->name('schedule.constructor');
 Route::post('/schedule/entries', [GroupScheduleController::class, 'store'])->name('schedule.entries.store');
 Route::post('/schedule/entries/{id}/edit', [GroupScheduleController::class, 'update'])->name('schedule.entries.update');
-Route::get('/schedule/entries/{id}/delete', [GroupScheduleController::class, 'delete'])->name('schedule.entries.delete');
+Route::delete('/schedule/entries/{id}/delete', [GroupScheduleController::class, 'delete'])->name('schedule.entries.delete');
 Route::post('/schedule/copy-week', [GroupScheduleController::class, 'copyWeek'])->name('schedule.copy-week');
 Route::post('/schedule/recalculate-week', [GroupScheduleController::class, 'recalculateWeek'])->name('schedule.recalculate-week');
 Route::get('/schedule/constructor/settings', [ScheduleConstructorSettingsController::class, 'index'])->name('schedule.constructor.settings');
 Route::post('/schedule/constructor/settings', [ScheduleConstructorSettingsController::class, 'save'])->name('schedule.constructor.settings.save');
 Route::post('/schedule/constructor/subjects', [ScheduleConstructorSettingsController::class, 'storeSubject'])->name('schedule.subjects.store');
-Route::get('/schedule/constructor/subjects/{id}/delete', [ScheduleConstructorSettingsController::class, 'deleteSubject'])->name('schedule.subjects.delete');
+Route::delete('/schedule/constructor/subjects/{id}/delete', [ScheduleConstructorSettingsController::class, 'deleteSubject'])->name('schedule.subjects.delete');
 
 Route::get('/settings','App\Http\Controllers\SettingsController@index');
 Route::get('/settings/authenticate','App\Http\Controllers\SettingsController@authenticate');
 Route::get('/settings/general','App\Http\Controllers\SettingsController@general');
 Route::get('/settings/database','App\Http\Controllers\SettingsController@database');
-Route::get('/settings/general/site/disable','App\Http\Controllers\SettingsController@disable');
-Route::get('/settings/general/site/enable','App\Http\Controllers\SettingsController@enable');
+Route::patch('/settings/general/site/disable','App\Http\Controllers\SettingsController@disable');
+Route::patch('/settings/general/site/enable','App\Http\Controllers\SettingsController@enable');
 Route::post('/settings/save','App\Http\Controllers\SettingsController@save');
 Route::post('/settings/database/save','App\Http\Controllers\SettingsController@saveDatabase');
 Route::post('/settings/database/save-remote-draft','App\Http\Controllers\SettingsController@saveRemoteDraft');
@@ -107,19 +107,19 @@ Route::post('/inv/reassign/{id}','App\Http\Controllers\InventoryController@reass
 Route::get('/inv/export','App\Http\Controllers\InventoryController@export');
 Route::get('/inv/print','App\Http\Controllers\InventoryController@print');
 Route::get('/inv/departments/manage','App\Http\Controllers\InventoryController@departments');
-Route::get('/inv/departments/delete/{id}','App\Http\Controllers\InventoryController@dep_delete');
+Route::delete('/inv/departments/delete/{id}','App\Http\Controllers\InventoryController@dep_delete');
 Route::post('/inv/departments/create','App\Http\Controllers\InventoryController@dep_create');
 Route::post('/inv/departments/{id}/edit','App\Http\Controllers\InventoryController@dep_edit');
 
 Route::get('/orders','App\Http\Controllers\OrdersController@my');
 Route::get('/orders/categories','App\Http\Controllers\OrdersController@categories');
 
-Route::get('/orders/{id}/status/set/{code}','App\Http\Controllers\OrdersController@UpdateStatus');
+Route::patch('/orders/{id}/status/set/{code}','App\Http\Controllers\OrdersController@UpdateStatus');
 
 Route::post('/orders/categories/create','App\Http\Controllers\OrdersController@c_category');
 Route::get('/orders/categories/create','App\Http\Controllers\OrdersController@notallowed');
 
-Route::get('/orders/categories/delete/{id}','App\Http\Controllers\OrdersController@d_category');
+Route::delete('/orders/categories/delete/{id}','App\Http\Controllers\OrdersController@d_category');
 
 Route::post('/orders/create', [OrdersController::class, 'create'])->name('orders.create');
 Route::get('/orders/create', [OrdersController::class, 'notallowed'])->name('orders.create');
@@ -144,7 +144,7 @@ Route::get('/portfolio/attachment/{portfolio}', [ProfileController::class, 'port
     ->whereNumber('portfolio')
     ->name('portfolio.file');
 
-Route::get('/notifications/mark-all-read', [NotificationController::class,'makeread']);
+Route::post('/notifications/mark-all-read', [NotificationController::class,'makeread']);
 
 Route::get('/passwords', [PasswordManagerController::class, 'index']);
 Route::post('/passwords/create', [PasswordManagerController::class, 'store']);
@@ -170,6 +170,6 @@ Route::post('/portfolio/confirm/{portfolio}/reject', [PortfolioConfirmationContr
 
 Route::get('/portfolio/types','App\Http\Controllers\ProfileController@stypes');
 Route::post('/portfolio/types/add', 'App\Http\Controllers\ProfileController@type_add');
-Route::get('/portfolio/types/{id}/delete', 'App\Http\Controllers\ProfileController@type_delete');
+Route::delete('/portfolio/types/{id}/delete', 'App\Http\Controllers\ProfileController@type_delete');
 Route::get('/portfolio/roles','App\Http\Controllers\ProfileController@sroles');
 });

@@ -25,7 +25,11 @@
                     <td class="text-end">
                         <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newChairInFaculty{{ $faculty->id }}">Добавить кафедру</button>
                         <button class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#editFaculty{{ $faculty->id }}">Редактировать</button>
-                        <a href="/teachers/faculties/{{ $faculty->id }}/delete" class="btn btn-outline-danger btn-sm">Удалить</a>
+                        <form action="/teachers/faculties/{{ $faculty->id }}/delete" method="post" class="d-inline">
+                            @csrf
+                            @method('DELETE')
+                            <button type="submit" class="btn btn-outline-danger btn-sm">Удалить</button>
+                        </form>
                     </td>
                 </tr>
                 <tr>

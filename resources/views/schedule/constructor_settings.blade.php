@@ -77,7 +77,11 @@
                     @foreach($subjects as $subject)
                         <li class="list-group-item d-flex justify-content-between align-items-center">
                             <span>{{ $subject->name }}</span>
-                            <a href="{{ route('schedule.subjects.delete', $subject->id) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить предмет?');">Удалить</a>
+                            <form method="post" action="{{ route('schedule.subjects.delete', $subject->id) }}" class="d-inline" onsubmit="return confirm('Удалить предмет?');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                            </form>
                         </li>
                     @endforeach
                 </ul>

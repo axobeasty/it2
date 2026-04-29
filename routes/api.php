@@ -22,7 +22,7 @@ Route::get('/current-time', function () {
 */
 Route::prefix('mobile')->group(function () {
     Route::get('/health', [MobileApiController::class, 'health']);
-    Route::post('/login', [MobileApiController::class, 'login']);
+    Route::post('/login', [MobileApiController::class, 'login'])->middleware('throttle:login-mobile');
     Route::post('/logout', [MobileApiController::class, 'logout']);
     Route::get('/me', [MobileApiController::class, 'me']);
     Route::get('/schedule', [MobileApiController::class, 'schedule']);

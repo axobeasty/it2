@@ -46,7 +46,15 @@ class EnsurePageAccess
         $request->session()->put('user', $user);
 
         $pageKey = PageAccess::pathToPageKey($request->path());
-        if (!$pageKey) {
+        if (! $pageKey) {
+            $normalizedPath = '/'.ltrim($request->path(), '/');
+            // Fail-closed for settings endpoints: if route is not mapped to a permission key,
+            // deny access instead of allowing by default.
+            if (str_starts_with($normalizedPath, '/settings')) {
+                Toastr::error('Ошибка доступа', 'Маршрут настроек не сопоставлен с правами доступа.', ['progressBar' => true]);
+                return redirect('/');
+            }
+
             return $next($request);
         }
 

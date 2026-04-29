@@ -244,7 +244,26 @@
                     </td>
                     <td>{{ optional($employee->department)->title }}</td>
                     <td>{{$employee->room}}</td>
-                    <td>@if($employee->active == 1) <a href="/employees/deactivate/{{$employee->id}}"><span class="badge text-bg-success">Активен</span></a>@else <a href="/employees/activate/{{$employee->id}}"><span class="badge text-bg-secondary">Неактивен</span></a> @endif <span class="badge text-bg-light border">{{ optional($employee->role)->name }}</span></td>
+                    <td>
+                        @if($employee->active == 1)
+                            <form action="/employees/deactivate/{{$employee->id}}" method="post" class="d-inline">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="border-0 bg-transparent p-0">
+                                    <span class="badge text-bg-success">Активен</span>
+                                </button>
+                            </form>
+                        @else
+                            <form action="/employees/activate/{{$employee->id}}" method="post" class="d-inline">
+                                @csrf
+                                @method('PATCH')
+                                <button type="submit" class="border-0 bg-transparent p-0">
+                                    <span class="badge text-bg-secondary">Неактивен</span>
+                                </button>
+                            </form>
+                        @endif
+                        <span class="badge text-bg-light border">{{ optional($employee->role)->name }}</span>
+                    </td>
                     <td>
                         <div class="text-end">
 
@@ -271,7 +290,11 @@
                                             </div>
                                             <div class="modal-footer">
                                                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отменить</button>
-                                                <a href="/employees/delete/{{$employee->id}}" type="button" class="btn btn-danger">Удалить</a>
+                                                <form action="/employees/delete/{{$employee->id}}" method="post" class="d-inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-danger">Удалить</button>
+                                                </form>
                                             </div>
                                         </div>
                                     </div>

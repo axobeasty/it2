@@ -1,9 +1,3 @@
-@php
-    $myPortfolioItems = $portfolios instanceof \Illuminate\Support\Collection
-        ? $portfolios->filter(fn ($p) => (int) $p->employee_id === (int) $user->id)
-        : collect($portfolios)->filter(fn ($p) => (int) $p->employee_id === (int) $user->id);
-@endphp
-
 <div class="modal fade" id="portfolioDetailModal" tabindex="-1" aria-labelledby="portfolioDetailModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content border-0 shadow">
@@ -42,10 +36,10 @@
 </div>
 
 <div class="row g-3">
-    @forelse($myPortfolioItems as $portfolio)
+    @forelse($portfolios as $portfolio)
         @php
-            $typeName = optional(\App\Models\PortfolioTypes::find($portfolio->type_id))->name ?? '—';
-            $roleName = optional(\App\Models\PortfolioRoles::find($portfolio->role_id))->name ?? '—';
+            $typeName = optional($portfolio->portfolioType)->name ?? '—';
+            $roleName = optional($portfolio->portfolioRole)->name ?? '—';
             $statusCode = (int) $portfolio->status;
             $statusLabel = match ($statusCode) {
                 0 => 'На проверке',
@@ -54,7 +48,7 @@
                 default => '—',
             };
             $fileUrl = $portfolio->file_path ? route('portfolio.file', $portfolio) : '';
-            $authorName = optional(\App\Models\Employee::find($portfolio->employee_id))->fio ?? '—';
+            $authorName = optional($portfolio->employee)->fio ?? '—';
             $dateStr = $portfolio->created_at
                 ? \Carbon\Carbon::parse($portfolio->created_at)->format('d.m.Y H:i')
                 : '—';
@@ -100,7 +94,7 @@
         </div>
     @empty
         <div class="col-12">
-            <p class="text-muted text-center py-5 mb-0">У вас пока нет записей в портфолио. Добавьте достижение кнопкой выше.</p>
+            <p class="text-muted text-center py-5 mb-0">Записей в портфолио пока нет.</p>
         </div>
     @endforelse
 </div>

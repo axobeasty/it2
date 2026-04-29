@@ -249,9 +249,13 @@
                                     @if(! $role->is_system)
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <a class="dropdown-item text-danger" href="/roles/{{ $role->id }}/delete" onclick="return confirm('Удалить роль «{{ $role->name }}»?');">
-                                                <i class="bi bi-trash me-2"></i>Удалить
-                                            </a>
+                                            <form action="/roles/{{ $role->id }}/delete" method="post" onsubmit="return confirm('Удалить роль «{{ $role->name }}»?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="dropdown-item text-danger">
+                                                    <i class="bi bi-trash me-2"></i>Удалить
+                                                </button>
+                                            </form>
                                         </li>
                                     @endif
                                 </ul>

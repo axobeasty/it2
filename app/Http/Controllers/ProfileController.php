@@ -18,7 +18,6 @@ class ProfileController extends Controller
     {
         $sessionUser = $request->session()->get('user');
         $settings = Settings::where('id', 1)->first();
-        $portfolios = Portfolio::all();
         $portfolioTypes = PortfolioTypes::all();
 
         if (! $sessionUser) {
@@ -28,6 +27,7 @@ class ProfileController extends Controller
         $user = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
             ->findOrFail($sessionUser->id);
         $request->session()->put('user', $user);
+        $portfolios = $this->resolveVisiblePortfolios($user);
 
         return view('dashboard.profile', compact('user', 'settings', 'portfolios', 'portfolioTypes'));
     }
@@ -202,8 +202,8 @@ class ProfileController extends Controller
 
                 return redirect('/dashboard');
             }
-            $portfolios = Portfolio::all();
-            $portfolioTypes = portfolioTypes::all();
+            $portfolios = $this->resolveVisiblePortfolios($user);
+            $portfolioTypes = PortfolioTypes::all();
             return view('dashboard.portfolio', compact('user', 'settings', 'portfolios','portfolioTypes'));
         }else{
             return redirect('/');
@@ -251,5 +251,19 @@ class ProfileController extends Controller
         Toastr::success('Успешно', 'Тип удалён', ["progressBar" => true]);
 
         return redirect()->back();
+    }
+
+    private function resolveVisiblePortfolios(Employee $user)
+    {
+        $query = Portfolio::query()
+            ->with(['portfolioType', 'portfolioRole', 'employee'])
+            ->orderByDesc('created_at');
+
+        $canModeratePortfolio = $user->canAccessPage('portfolio_confirm') || $user->canAccessPage('settings');
+        if (! $canModeratePortfolio) {
+            $query->where('employee_id', (int) $user->id);
+        }
+
+        return $query->get();
     }
 }

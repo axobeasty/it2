@@ -37,7 +37,11 @@
                             <a href="/groups/{{ $group->id }}/print-students" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener noreferrer" title="Открыть список для печати">Печать списка</a>
                             <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#assignStudents{{ $group->id }}">Прикрепить студентов</button>
                             <button class="btn btn-outline-dark btn-sm" data-bs-toggle="modal" data-bs-target="#editGroup{{ $group->id }}">Редактировать</button>
-                            <a href="/groups/{{ $group->id }}/delete" class="btn btn-outline-danger btn-sm">Удалить</a>
+                            <form action="/groups/{{ $group->id }}/delete" method="post" class="d-inline">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Удалить</button>
+                            </form>
                         </td>
                     </tr>
                     <tr>
@@ -46,7 +50,11 @@
                             @forelse($group->students as $student)
                                 <span class="badge text-bg-light border me-1 mb-1">
                                     {{ $student->fio }}
-                                    <a href="/groups/students/{{ $student->id }}/detach" class="ms-1 text-danger text-decoration-none">x</a>
+                                    <form action="/groups/students/{{ $student->id }}/detach" method="post" class="d-inline">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="ms-1 text-danger text-decoration-none border-0 bg-transparent p-0">x</button>
+                                    </form>
                                 </span>
                             @empty
                                 <span class="text-muted">Нет студентов</span>

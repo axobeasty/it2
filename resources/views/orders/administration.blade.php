@@ -260,15 +260,39 @@
                                                     </div>
                                                     <div class="modal-footer">
                                                         @if($order->status == 0)
-                                                            <a href="/orders/{{$order->id}}/status/set/1" class="btn btn-primary">В процессе</a>
-                                                            <a href="/orders/{{$order->id}}/status/set/3" class="btn btn-danger">Закрыть принудительно</a>
+                                                            <form action="/orders/{{$order->id}}/status/set/1" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-primary">В процессе</button>
+                                                            </form>
+                                                            <form action="/orders/{{$order->id}}/status/set/3" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-danger">Закрыть принудительно</button>
+                                                            </form>
                                                         @elseif($order->status == 1)
-                                                            <a href="/orders/{{$order->id}}/status/set/2" class="btn btn-success">Завершено</a>
-                                                            <a href="/orders/{{$order->id}}/status/set/3" class="btn btn-danger">Закрыть принудительно</a>
+                                                            <form action="/orders/{{$order->id}}/status/set/2" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-success">Завершено</button>
+                                                            </form>
+                                                            <form action="/orders/{{$order->id}}/status/set/3" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-danger">Закрыть принудительно</button>
+                                                            </form>
                                                         @elseif($order->status == 2)
-                                                            <a href="/orders/{{$order->id}}/status/set/0" class="btn btn-warning">Открыть</a>
+                                                            <form action="/orders/{{$order->id}}/status/set/0" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-warning">Открыть</button>
+                                                            </form>
                                                         @elseif($order->status == 3)
-                                                            <a href="/orders/{{$order->id}}/status/set/0" class="btn btn-warning">Открыть</a>
+                                                            <form action="/orders/{{$order->id}}/status/set/0" method="post" class="d-inline">
+                                                                @csrf
+                                                                @method('PATCH')
+                                                                <button type="submit" class="btn btn-warning">Открыть</button>
+                                                            </form>
                                                         @endif
                                                     </div>
                                                 </div>

@@ -308,7 +308,11 @@
                                         </div>
                                         <div class="col-md-3 text-nowrap">
                                             <button type="submit" class="btn btn-sm btn-primary" @disabled($subjects->isEmpty())>Сохранить</button>
-                                            <a href="{{ route('schedule.entries.delete', ['id' => $e->id, 'group_id' => $filterGroupId]) }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('Удалить занятие?');">Удалить</a>
+                                            <form method="post" action="{{ route('schedule.entries.delete', ['id' => $e->id, 'group_id' => $filterGroupId]) }}" class="d-inline" onsubmit="return confirm('Удалить занятие?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">Удалить</button>
+                                            </form>
                                         </div>
                                     </div>
                                 </form>

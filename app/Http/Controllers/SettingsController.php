@@ -10,11 +10,13 @@ use App\Support\DeployVersion;
 use App\Support\GitHubDeployApi;
 use Brian2694\Toastr\Facades\Toastr;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\Response as HttpResponse;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Symfony\Component\Process\Process;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class SettingsController extends Controller
@@ -215,15 +217,11 @@ class SettingsController extends Controller
 
     public function migrateDatabase(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return redirect('/');
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database');
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
-            return redirect('/');
-        }
+        $user = $auth;
 
         $validated = $request->validate([
             'source_profile' => ['required', 'in:sqlite,remote'],
@@ -250,20 +248,11 @@ class SettingsController extends Controller
 
     public function migrateDatabaseStream(Request $request): StreamedResponse
     {
-        if (! $request->session()->has('user')) {
-            return response()->stream(function () {
-                $this->streamEvent('error', 0, 'Необходима авторизация.');
-                $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
-            }, 401, $this->streamHeaders());
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', false, true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->stream(function () {
-                $this->streamEvent('error', 0, 'У Вас недостаточно прав для выполнения этого действия.');
-                $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
-            }, 403, $this->streamHeaders());
-        }
+        $user = $auth;
 
         $validated = $request->validate([
             'source_profile' => ['required', 'in:sqlite,remote'],
@@ -303,21 +292,11 @@ class SettingsController extends Controller
     public function saveDatabase(Request $request)
     {
         $wantsJson = $request->expectsJson() || $request->wantsJson();
-        if (! $request->session()->has('user')) {
-            if ($wantsJson) {
-                return response()->json(['ok' => false, 'message' => 'Необходима авторизация.'], 401);
-            }
-            return redirect('/');
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', $wantsJson);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            if ($wantsJson) {
-                return response()->json(['ok' => false, 'message' => 'У Вас недостаточно прав для выполнения этого действия.'], 403);
-            }
-            Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
-            return redirect('/');
-        }
+        $user = $auth;
 
         $validated = $request->validate([
             'db_profile' => ['required', 'in:sqlite,remote'],
@@ -454,20 +433,11 @@ class SettingsController extends Controller
 
     public function testRemoteDatabaseConnection(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         try {
             $this->databaseProfileManager->checkRemoteConnection();
@@ -485,20 +455,11 @@ class SettingsController extends Controller
 
     public function dryRunRemoteInitialization(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         try {
             $inspection = $this->databaseProfileManager->inspectRemoteDatabase();
@@ -522,20 +483,11 @@ class SettingsController extends Controller
 
     public function saveRemoteDraft(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         $validated = $request->validate([
             'remote_host' => ['nullable', 'string', 'max:255'],
@@ -574,20 +526,11 @@ class SettingsController extends Controller
 
     public function activateDatabaseProfile(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         $validated = $request->validate([
             'db_profile' => ['required', 'in:sqlite,remote'],
@@ -670,15 +613,11 @@ class SettingsController extends Controller
 
     public function initializeRemoteDatabase(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return redirect('/');
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database');
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
-            return redirect('/');
-        }
+        $user = $auth;
 
         try {
             $result = $this->databaseProfileManager->initializeRemoteDatabase();
@@ -696,20 +635,11 @@ class SettingsController extends Controller
 
     public function initializeRemoteDatabaseStream(Request $request): StreamedResponse
     {
-        if (! $request->session()->has('user')) {
-            return response()->stream(function () {
-                $this->streamEvent('error', 0, 'Необходима авторизация.');
-                $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
-            }, 401, $this->streamHeaders());
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings_database', false, true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->stream(function () {
-                $this->streamEvent('error', 0, 'У Вас недостаточно прав для выполнения этого действия.');
-                $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
-            }, 403, $this->streamHeaders());
-        }
+        $user = $auth;
 
         return response()->stream(function () {
             @set_time_limit(0);
@@ -823,6 +753,80 @@ class SettingsController extends Controller
         return redirect('/settings/email');
     }
 
+    /**
+     * Defense-in-depth for sensitive settings actions.
+     * Returns authenticated user object or HTTP response (401/403).
+     */
+    private function authorizeSensitiveSettingsRequest(
+        Request $request,
+        string $permission,
+        bool $wantsJson = false,
+        bool $wantsStream = false,
+    ) {
+        if (! $request->session()->has('user')) {
+            $this->auditSensitiveSettingsAccess($request, null, $permission, false, 'unauthenticated');
+
+            if ($wantsStream) {
+                return response()->stream(function () {
+                    $this->streamEvent('error', 0, 'Необходима авторизация.');
+                    $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
+                }, 401, $this->streamHeaders());
+            }
+            if ($wantsJson) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Необходима авторизация.',
+                ], 401);
+            }
+
+            return redirect('/');
+        }
+
+        $user = $request->session()->get('user');
+        if (! $user || ! $user->canAccessPage($permission)) {
+            $this->auditSensitiveSettingsAccess($request, $user, $permission, false, 'permission_denied');
+
+            if ($wantsStream) {
+                return response()->stream(function () {
+                    $this->streamEvent('error', 0, 'У Вас недостаточно прав для выполнения этого действия.');
+                    $this->streamEvent('done', 0, 'Операция завершена с ошибкой.');
+                }, 403, $this->streamHeaders());
+            }
+            if ($wantsJson) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'У Вас недостаточно прав для выполнения этого действия.',
+                ], 403);
+            }
+
+            Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
+            return redirect('/');
+        }
+
+        $this->auditSensitiveSettingsAccess($request, $user, $permission, true, null);
+
+        return $user;
+    }
+
+    private function auditSensitiveSettingsAccess(
+        Request $request,
+        $user,
+        string $permission,
+        bool $allowed,
+        ?string $reason,
+    ): void {
+        Log::info('security.settings_sensitive_access', [
+            'allowed' => $allowed,
+            'reason' => $reason,
+            'required_permission' => $permission,
+            'path' => '/'.ltrim($request->path(), '/'),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'user_id' => isset($user->id) ? (int) $user->id : null,
+            'user_login' => isset($user->login) ? (string) $user->login : null,
+        ]);
+    }
+
     private function streamHeaders(): array
     {
         return [
@@ -931,20 +935,11 @@ class SettingsController extends Controller
 
     public function checkGitUpdates(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         $result = $this->computeUpdateAvailability();
 
@@ -976,20 +971,11 @@ class SettingsController extends Controller
 
     public function pullGitUpdates(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         $basePath = base_path();
         if (! DeployVersion::isGitWorkingTree($basePath)) {
@@ -1089,20 +1075,11 @@ class SettingsController extends Controller
 
     public function saveDeployRef(Request $request)
     {
-        if (! $request->session()->has('user')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Необходима авторизация.',
-            ], 401);
+        $auth = $this->authorizeSensitiveSettingsRequest($request, 'settings', true);
+        if ($auth instanceof HttpResponse) {
+            return $auth;
         }
-
-        $user = $request->session()->get('user');
-        if (! $user->canAccessPage('settings')) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'У Вас недостаточно прав для выполнения этого действия.',
-            ], 403);
-        }
+        $user = $auth;
 
         $resolved = DeployVersion::resolveLocalRef(base_path());
         if ($resolved['source'] === 'env') {

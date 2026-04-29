@@ -307,7 +307,10 @@
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h5 class="header-title">Уведомления</h5>
                     <span class="position-relative" >
-                            <a href="/notifications/mark-all-read" class="text-decoration-none fw-bold">Прочитать всё</a>
+                            <form action="/notifications/mark-all-read" method="post" class="d-inline">
+                                @csrf
+                                <button type="submit" class="text-decoration-none fw-bold border-0 bg-transparent p-0">Прочитать всё</button>
+                            </form>
 
             </span>
 
