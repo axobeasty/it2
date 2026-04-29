@@ -756,9 +756,9 @@ class SettingsController extends Controller
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
                 return redirect('/');
             }
-        }else{
-        return redirect('/');
-    }
+        } else {
+            return redirect('/');
+        }
     }
 
     public function sendTestEmail(Request $request)
@@ -816,7 +816,6 @@ class SettingsController extends Controller
         Toastr::success('Запрос на отправку тестового письма выполнен. Проверьте почту и, при необходимости, журнал ошибок доставки ниже.', 'Тестовое сообщение', ["progressBar"=> true]);
 
         return redirect('/settings/email');
-    }
     }
 
     private function streamHeaders(): array
