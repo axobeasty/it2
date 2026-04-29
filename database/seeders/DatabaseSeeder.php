@@ -2,12 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-
-class DatabaseSeeder extends Seeder
+class DatabaseSeeder extends BaseSeeder
 {
     /**
      * Seed the application's database.
+     *
+     * Дочерние сидеры наследуют {@see BaseSeeder}: вставки по уникальным ключам без дубликатов при повторном запуске.
      */
     public function run(): void
     {

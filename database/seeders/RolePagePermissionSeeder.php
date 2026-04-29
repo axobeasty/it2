@@ -4,9 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\RolePagePermission;
 use App\Models\Roles;
-use Illuminate\Database\Seeder;
 
-class RolePagePermissionSeeder extends Seeder
+class RolePagePermissionSeeder extends BaseSeeder
 {
     public function run(): void
     {

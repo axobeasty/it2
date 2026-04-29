@@ -2,24 +2,19 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-
-class Settings extends Seeder
+class Settings extends BaseSeeder
 {
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
-        DB::table('settings')->insert([
+        $this->seedUpsert('settings', ['id' => 1], [
             'title' => 'Кгамт им. Л.Б. Васильева - IT Отдел',
             'is_enabled' => true,
-            'auth_mode'=>2,
+            'auth_mode' => 2,
             'disable_reason' => 'Сайт в текущий момент находится на техническом обслуживании и в скором времени станет доступен!',
-            'mode'=> true
+            'mode' => true,
         ]);
     }
 }

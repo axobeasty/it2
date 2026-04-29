@@ -2,10 +2,9 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
-class SchedulePagePermissionsSeeder extends Seeder
+class SchedulePagePermissionsSeeder extends BaseSeeder
 {
     /**
      * Права на страницы расписания (идемпотентно, можно вызывать после Roles).

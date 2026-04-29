@@ -2,18 +2,13 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-
-class Roles extends Seeder
+class Roles extends BaseSeeder
 {
     /**
      * Run the database seeds.
      */
     public function run(): void
     {
-        $now = now();
-
         foreach ([
             'Администратор',
             'Директор',
@@ -21,11 +16,8 @@ class Roles extends Seeder
             'Преподаватель',
             'Студент',
         ] as $name) {
-            DB::table('roles')->insert([
-                'name' => $name,
+            $this->seedUpsert('roles', ['name' => $name], [
                 'is_system' => true,
-                'created_at' => $now,
-                'updated_at' => $now,
             ]);
         }
     }

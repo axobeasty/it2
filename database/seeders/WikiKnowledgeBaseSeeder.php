@@ -4,10 +4,9 @@ namespace Database\Seeders;
 
 use App\Models\Employee;
 use App\Models\WikiPage;
-use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Schema;
 
-class WikiKnowledgeBaseSeeder extends Seeder
+class WikiKnowledgeBaseSeeder extends BaseSeeder
 {
     public function run(): void
     {
