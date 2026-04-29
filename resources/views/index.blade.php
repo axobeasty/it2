@@ -262,7 +262,9 @@
                                            placeholder="Введите пароль" required>
                                 </div>
                                 <button type="submit" class="btn btn-primary btn-lg">Войти</button>
-
+                                <p class="text-center mt-3 mb-0">
+                                    <a href="{{ route('password.forgot') }}" class="small">Восстановить пароль</a>
+                                </p>
                             </form>
                         </div>
                         @break
@@ -288,6 +290,9 @@
                                                    placeholder="Введите пароль" required>
                                         </div>
                                         <button type="submit" class="btn btn-primary btn-lg">Войти</button>
+                                        <p class="text-center mt-3 mb-0">
+                                            <a href="{{ route('password.forgot') }}" class="small">Восстановить пароль</a>
+                                        </p>
                                     </form>
                                 </div>
                                     <p class="text-center">ИЛИ</p>

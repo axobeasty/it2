@@ -14,8 +14,9 @@ class Email
 {
     /**
      * @param  array<string, mixed>|null  $context  category (const MailDeliveryFailure::CATEGORY_*), mail_type, recipient_employee_id, recipient_name, triggered_by_employee_id, meta
+     * @return bool true, если письмо ушло на SMTP; иначе false (подробности — в канале лога mail и при сбое в mail_delivery_failures)
      */
-    public function send(string $title, string $body, string $address, string $name, ?array $context = null): void
+    public function send(string $title, string $body, string $address, string $name, ?array $context = null): bool
     {
         $address = trim($address);
         $ctx = $this->normalizeContext($context);
@@ -34,7 +35,7 @@ class Email
                 );
             }
 
-            return;
+            return false;
         }
 
         if (! $settings || (int) $settings->email_enabled !== 1) {
@@ -50,7 +51,7 @@ class Email
                 );
             }
 
-            return;
+            return false;
         }
 
         $host = trim((string) ($settings->smtp_host ?? ''));
@@ -68,13 +69,20 @@ class Email
                 );
             }
 
-            return;
+            return false;
         }
 
         $mail = new PHPMailer(true);
         try {
             $mail->CharSet = PHPMailer::CHARSET_UTF8;
+            // Никогда не выводим SMTP в HTTP-ответ: только в канал `mail` (и при отладке — построчно).
             $mail->SMTPDebug = config('app.debug') ? SMTP::DEBUG_SERVER : SMTP::DEBUG_OFF;
+            $mail->Debugoutput = static function (string $str, int $level): void {
+                $line = trim($str);
+                if ($line !== '') {
+                    Log::channel('mail')->debug($line, ['phpmailer_smtp_level' => $level]);
+                }
+            };
             $mail->isSMTP();
             $mail->Host = $host;
 
@@ -100,7 +108,7 @@ class Email
                         );
                     }
 
-                    return;
+                    return false;
                 }
             }
             $mail->Password = $password;
@@ -148,7 +156,22 @@ class Email
             $mail->Body = '<html>'.$body.'</html>';
 
             $mail->send();
+
+            Log::channel('mail')->info('Почта: письмо отправлено', [
+                'subject' => $title,
+                'to' => $address,
+                'from' => $fromAddr,
+                'mail_type' => $ctx !== null ? ($ctx['mail_type'] ?? null) : null,
+            ]);
+
+            return true;
         } catch (PHPMailerException $e) {
+            Log::channel('mail')->error('Почта: ошибка отправки', [
+                'subject' => $title,
+                'to' => $address,
+                'mailer' => $mail->ErrorInfo,
+                'exception' => $e->getMessage(),
+            ]);
             Log::error('Почта: ошибка отправки', [
                 'mailer' => $mail->ErrorInfo,
                 'exception' => $e->getMessage(),
@@ -165,6 +188,8 @@ class Email
                 );
             }
         }
+
+        return false;
     }
 
     /**

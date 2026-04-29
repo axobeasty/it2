@@ -84,6 +84,10 @@
         </div>
 
         <div class="settings-section-title mb-3 mt-4">Отправитель</div>
+        <p class="small text-muted mb-3">
+            Адрес «От кого» должен совпадать с доменом, который вы подтвердили у своего SMTP-провайдера (например, в панели smtp.bz — раздел доменов).
+            Публичные ящики вроде <code>@gmail.com</code> чаще всего <strong>нельзя</strong> указать как отправителя: сервер вернёт ошибку «domain not verified».
+        </p>
         <div class="row g-3 mb-4">
             <div class="col-12 col-md-6">
                 <label for="mail_from_address" class="settings-field-label">Адрес «От кого»</label>
@@ -135,7 +139,20 @@
     @php
         $failureTree = $mailFailureTree ?? [];
         $failureTotal = $mailFailureTotal ?? 0;
+        $mailSendLogLines = $mailSendLogLines ?? [];
     @endphp
+
+    <div class="settings-section-title mb-3 mt-5">Журнал отправки</div>
+    <p class="small text-muted mb-3">
+        Итоги отправки писем и при <code>APP_DEBUG=true</code> — отладочный обмен с SMTP пишутся только в файл
+        <code class="small">storage/logs/mail.log</code> (в HTTP-ответ и на экран это не попадает). Ниже — последние строки этого файла.
+    </p>
+    @if (count($mailSendLogLines) === 0)
+        <div class="alert alert-light border rounded-3 mb-0">Записей пока нет (файл журнала отсутствует или пуст).</div>
+    @else
+        <pre class="small bg-dark text-light border-0 rounded-3 p-3 mb-0 font-monospace" style="max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word;">@foreach ($mailSendLogLines as $line){{ $line }}
+@endforeach</pre>
+    @endif
 
     <div class="settings-section-title mb-3 mt-5">Журнал ошибок доставки</div>
     <p class="small text-muted mb-3">

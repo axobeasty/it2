@@ -750,8 +750,9 @@ class SettingsController extends Controller
                 $mailFailureTotal = Schema::hasTable('mail_delivery_failures')
                     ? MailDeliveryFailure::query()->count()
                     : 0;
+                $mailSendLogLines = $this->tailMailSendLog(220);
 
-                return view('settings.email', compact('user', 'settings', 'mailFailureTree', 'mailFailureTotal'));
+                return view('settings.email', compact('user', 'settings', 'mailFailureTree', 'mailFailureTotal', 'mailSendLogLines'));
             }else{
                 Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
                 return redirect('/');
@@ -797,7 +798,7 @@ class SettingsController extends Controller
         $body = 'Это тестовое письмо из настроек системы <b>'.e($settings->title).'</b>.<br>Если вы получили это письмо, SMTP настроен корректно.';
 
         $email = new Email();
-        $email->send(
+        $sent = $email->send(
             $title,
             $body,
             (string) $validated['test_email'],
@@ -813,7 +814,11 @@ class SettingsController extends Controller
             ]
         );
 
-        Toastr::success('Запрос на отправку тестового письма выполнен. Проверьте почту и, при необходимости, журнал ошибок доставки ниже.', 'Тестовое сообщение', ["progressBar"=> true]);
+        if ($sent) {
+            Toastr::success('Тестовое письмо отправлено. Итог также записан в журнал отправки ниже.', 'Тестовое сообщение', ["progressBar"=> true]);
+        } else {
+            Toastr::error('Отправка не удалась. Подробности — в журнале отправки и в журнале ошибок доставки ниже.', 'Тестовое сообщение', ["progressBar"=> true]);
+        }
 
         return redirect('/settings/email');
     }
@@ -825,6 +830,32 @@ class SettingsController extends Controller
             'Cache-Control' => 'no-cache, no-store, must-revalidate',
             'X-Accel-Buffering' => 'no',
         ];
+    }
+
+    /**
+     * Последние строки из storage/logs/mail.log (канал логирования `mail`).
+     *
+     * @return list<string>
+     */
+    private function tailMailSendLog(int $maxLines = 200): array
+    {
+        $path = storage_path('logs/mail.log');
+        if (! is_readable($path)) {
+            return [];
+        }
+
+        $lines = @file($path, FILE_IGNORE_NEW_LINES);
+        if ($lines === false) {
+            return [];
+        }
+
+        $lines = array_values(array_filter($lines, static fn ($l) => $l !== null && $l !== ''));
+
+        if (count($lines) <= $maxLines) {
+            return $lines;
+        }
+
+        return array_slice($lines, -$maxLines);
     }
 
     /**

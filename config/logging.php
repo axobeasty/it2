@@ -123,6 +123,17 @@ return [
             'handler' => NullHandler::class,
         ],
 
+        /*
+         * Исходящая почта: итоги отправки и (при APP_DEBUG) отладочный вывод SMTP — только в файл,
+         * без вывода в HTTP-ответ. Просмотр хвоста лога — на странице «Настройки → Почта».
+         */
+        'mail' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/mail.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
+        ],
+
         'emergency' => [
             'path' => storage_path('logs/laravel.log'),
         ],

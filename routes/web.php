@@ -12,6 +12,7 @@ use App\Http\Controllers\AcademicStructureController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\StudentTestingController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\PasswordResetController;
 use App\Models\Notifs;
 use Illuminate\Support\Facades\Route;
 
@@ -21,6 +22,11 @@ Route::get('/logout','App\Http\Controllers\AuthController@logout');
 Route::get('/auth','App\Http\Controllers\AuthController@notallowed');
 Route::post('/auth','App\Http\Controllers\AuthController@login');
 Route::get('/employees/{id}/activate/{code}','App\Http\Controllers\EmployeeController@activateEmployee');
+
+Route::get('/password/forgot', [PasswordResetController::class, 'showForgotForm'])->name('password.forgot');
+Route::post('/password/forgot', [PasswordResetController::class, 'sendResetLink'])->middleware('throttle:5,1')->name('password.forgot.send');
+Route::get('/password/reset/{token}', [PasswordResetController::class, 'showResetForm'])->name('password.reset')->where('token', '[a-fA-F0-9]{64}');
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:10,1')->name('password.reset.submit');
 
 Route::middleware('page.access')->group(function () {
 Route::get('/dashboard','App\Http\Controllers\AuthController@dashboard');

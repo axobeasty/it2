@@ -72,6 +72,8 @@ class MailDeliveryFailure extends Model
             'inventory_unassign' => 'Открепление инвентаря',
             'inventory_unassign_all' => 'Снятие всего инвентаря',
             'inventory_reassign' => 'Повторное закрепление',
+            'password_reset' => 'Восстановление пароля',
+            'settings_test' => 'Тест SMTP из настроек',
             default => $mailType,
         };
     }
