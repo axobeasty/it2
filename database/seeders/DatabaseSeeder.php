@@ -20,5 +20,6 @@ class DatabaseSeeder extends Seeder
         $this->call(O_Category::class);
         $this->call(Port_roles::class);
         $this->call(Port_types::class);
+        $this->call(WikiKnowledgeBaseSeeder::class);
     }
 }

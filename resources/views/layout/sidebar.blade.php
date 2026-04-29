@@ -255,6 +255,16 @@
                 </li>
             </ul>
             @endif
+            @if($canKnowledgeWiki ?? false)
+            <ul class="nav flex-column gap-1 pb-3">
+                <li>
+                    <a href="{{ route('wiki.index') }}" title="База знаний" class="nav-link sidebar-link d-flex align-items-center">
+                        <i class="bi bi-journal-bookmark-fill me-2 text-primary"></i>
+                        <span class="fw-medium sidebar-link-text">База знаний</span>
+                    </a>
+                </li>
+            </ul>
+            @endif
             @if($canOrdersMy || $canOrdersAdmin)
             <h6 class="sidebar-section-title" data-section-icon="bi bi-card-checklist">
                 Заявки

@@ -35,6 +35,8 @@ class MenuVisibility
             'canScheduleTeacher' => $user->canAccessPage('schedule_teacher'),
             'canScheduleConstructor' => $user->canAccessPage('schedule_constructor'),
             'canScheduleConstructorSettings' => $user->canAccessPage('schedule_constructor_settings'),
+            'canKnowledgeWiki' => $user->canAccessPage('knowledge_wiki'),
+            'canKnowledgeWikiEdit' => $user->canAccessPage('knowledge_wiki_edit'),
         ];
     }
 }

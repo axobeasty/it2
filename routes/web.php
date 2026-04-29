@@ -13,6 +13,7 @@ use App\Http\Controllers\RoleController;
 use App\Http\Controllers\StudentTestingController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\WikiController;
 use App\Models\Notifs;
 use Illuminate\Support\Facades\Route;
 
@@ -145,6 +146,14 @@ Route::get('/portfolio/attachment/{portfolio}', [ProfileController::class, 'port
     ->name('portfolio.file');
 
 Route::post('/notifications/mark-all-read', [NotificationController::class,'makeread']);
+
+Route::get('/wiki', [WikiController::class, 'index'])->name('wiki.index');
+Route::get('/wiki/create', [WikiController::class, 'create'])->name('wiki.create');
+Route::post('/wiki/store', [WikiController::class, 'store'])->name('wiki.store');
+Route::get('/wiki/{slug}/edit', [WikiController::class, 'edit'])->where('slug', WikiController::SLUG_REGEX)->name('wiki.edit');
+Route::patch('/wiki/{slug}', [WikiController::class, 'update'])->where('slug', WikiController::SLUG_REGEX)->name('wiki.update');
+Route::delete('/wiki/{slug}', [WikiController::class, 'destroy'])->where('slug', WikiController::SLUG_REGEX)->name('wiki.destroy');
+Route::get('/wiki/{slug}', [WikiController::class, 'show'])->where('slug', WikiController::SLUG_REGEX)->name('wiki.show');
 
 Route::get('/passwords', [PasswordManagerController::class, 'index']);
 Route::post('/passwords/create', [PasswordManagerController::class, 'store']);

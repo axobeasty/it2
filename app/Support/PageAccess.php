@@ -53,6 +53,9 @@ class PageAccess
         'schedule_teacher' => ['/schedule/teacher'],
         'schedule_constructor' => ['/schedule/constructor', '/schedule/entries', '/schedule/entries/{id}/edit', '/schedule/entries/{id}/delete', '/schedule/copy-week', '/schedule/recalculate-week'],
         'schedule_constructor_settings' => ['/schedule/constructor/settings', '/schedule/constructor/subjects', '/schedule/constructor/subjects/{id}/delete'],
+        /** База знаний (wiki): сначала узкие пути, иначе /wiki/create попадёт под /wiki/{slug}. */
+        'knowledge_wiki_edit' => ['/wiki/create', '/wiki/store', '/wiki/{slug}/edit'],
+        'knowledge_wiki' => ['/wiki', '/wiki/{slug}'],
         /** Программное право: вход в интерфейс при отключённом сайте (без привязки к URL). */
         'maintenance_bypass' => [],
     ];
@@ -83,6 +86,8 @@ class PageAccess
         'schedule_teacher' => 'Расписание: просмотр (преподаватель)',
         'schedule_constructor' => 'Расписание: конструктор (редактирование)',
         'schedule_constructor_settings' => 'Расписание: настройки конструктора',
+        'knowledge_wiki' => 'База знаний (чтение)',
+        'knowledge_wiki_edit' => 'База знаний (редактирование)',
         'maintenance_bypass' => 'Доступ при отключённом сайте (техобслуживание)',
     ];
 
@@ -104,6 +109,7 @@ class PageAccess
             'Расписание: просмотр' => ['schedule_my', 'schedule_teacher'],
             'Расписание: конструктор и настройки' => ['schedule_constructor', 'schedule_constructor_settings'],
             'Портфолио' => ['portfolio', 'portfolio_types', 'portfolio_confirm'],
+            'База знаний' => ['knowledge_wiki', 'knowledge_wiki_edit'],
             'Настройки системы' => ['settings', 'settings_database'],
             'Безопасность и обслуживание' => ['password_manager', 'maintenance_bypass'],
         ];

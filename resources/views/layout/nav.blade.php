@@ -30,6 +30,14 @@
                     </li>
                 @endif
 
+                @if($canKnowledgeWiki ?? false)
+                    <li class="nav-item">
+                        <a class="nav-link nav-link-custom nav-tooltip px-3 py-2 rounded-3" href="{{ route('wiki.index') }}" data-bs-toggle="tooltip" data-bs-placement="bottom" title="База знаний">
+                            <i class="bi bi-journal-bookmark me-2 opacity-75"></i><span class="nav-text">База знаний</span>
+                        </a>
+                    </li>
+                @endif
+
                 @if($canOrdersMy || $canOrdersAdmin)
                 <li class="nav-item dropdown"
                     onmouseenter="showDropdown(this)"

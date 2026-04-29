@@ -28,6 +28,7 @@ test('sensitive state-changing routes are not exposed via GET', function () {
         'settings/general/site/disable' => 'PATCH',
         'settings/general/site/enable' => 'PATCH',
         'notifications/mark-all-read' => 'POST',
+        'wiki/store' => 'POST',
     ];
 
     foreach ($routes as $uri => $method) {
@@ -48,6 +49,39 @@ test('login endpoints are protected by custom throttle middleware', function () 
     }
     expect($mobileLoginRoute)->not->toBeNull('Mobile API login route must exist.');
     expect($mobileLoginRoute->gatherMiddleware())->toContain('throttle:login-mobile');
+});
+
+test('wiki mutating routes do not allow GET', function () {
+    $store = routeByUriAndMethod('wiki/store', 'POST');
+    expect($store)->not->toBeNull('wiki.store must exist.');
+    expect($store->methods())->not->toContain('GET');
+
+    $update = Route::getRoutes()->getByName('wiki.update');
+    expect($update)->not->toBeNull();
+    expect($update->methods())->toContain('PATCH');
+    expect($update->methods())->not->toContain('GET');
+
+    $destroy = Route::getRoutes()->getByName('wiki.destroy');
+    expect($destroy)->not->toBeNull();
+    expect($destroy->methods())->toContain('DELETE');
+    expect($destroy->methods())->not->toContain('GET');
+});
+
+test('page access map includes wiki paths in correct order', function () {
+    $keys = array_keys(PageAccess::MAP);
+    $editIdx = array_search('knowledge_wiki_edit', $keys, true);
+    $readIdx = array_search('knowledge_wiki', $keys, true);
+    expect($editIdx)->not->toBeFalse();
+    expect($readIdx)->not->toBeFalse();
+    expect($editIdx)->toBeLessThan($readIdx);
+
+    $edit = PageAccess::MAP['knowledge_wiki_edit'] ?? [];
+    $read = PageAccess::MAP['knowledge_wiki'] ?? [];
+    expect($edit)->toContain('/wiki/create');
+    expect($edit)->toContain('/wiki/store');
+    expect($edit)->toContain('/wiki/{slug}/edit');
+    expect($read)->toContain('/wiki');
+    expect($read)->toContain('/wiki/{slug}');
 });
 
 test('page access map contains all sensitive settings endpoints', function () {
