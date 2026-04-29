@@ -110,6 +110,28 @@
         </button>
     </form>
 
+    <div class="settings-section-title mb-3 mt-4">Тест SMTP</div>
+    <p class="small text-muted mb-3">Отправьте тестовое письмо на указанный адрес, чтобы проверить текущие настройки SMTP.</p>
+    <form action="/settings/email/test" method="post" class="mb-0">
+        @csrf
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-8">
+                <label for="test_email" class="settings-field-label">E-mail для теста</label>
+                <input type="email" name="test_email" id="test_email" class="form-control rounded-3 @error('test_email') is-invalid @enderror"
+                    value="{{ old('test_email', $user->email ?? '') }}"
+                    placeholder="user@example.com">
+                @error('test_email')
+                    <div class="invalid-feedback">{{ $message }}</div>
+                @enderror
+            </div>
+            <div class="col-12 col-md-4">
+                <button type="submit" class="btn btn-outline-primary rounded-pill px-4 w-100">
+                    <i class="bi bi-send me-1"></i> Отправить тестовое сообщение
+                </button>
+            </div>
+        </div>
+    </form>
+
     @php
         $failureTree = $mailFailureTree ?? [];
         $failureTotal = $mailFailureTotal ?? 0;

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Email\Email;
 use App\Models\MailDeliveryFailure;
 use App\Models\Settings;
 use App\Support\DatabaseProfileManager;
@@ -757,6 +758,64 @@ class SettingsController extends Controller
             }
         }else{
         return redirect('/');
+    }
+    }
+
+    public function sendTestEmail(Request $request)
+    {
+        if (! $request->session()->has('user')) {
+            return redirect('/');
+        }
+
+        $user = $request->session()->get('user');
+        if (! $user->canAccessPage('settings')) {
+            Toastr::error('Ошибка доступа', 'У Вас недостаточно прав для выполнения этого действия!', ["progressBar"=> true]);
+            return redirect('/');
+        }
+
+        $validated = $request->validate([
+            'test_email' => ['required', 'email', 'max:255'],
+        ]);
+
+        $settings = Settings::where('id', 1)->first();
+        if (! $settings) {
+            Toastr::error('Настройки сайта не найдены.', 'Ошибка', ["progressBar"=> true]);
+            return redirect('/settings/email')->withInput();
+        }
+
+        if ((int) $settings->email_enabled !== 1) {
+            Toastr::error('Отправка почты отключена. Включите её в настройках и повторите попытку.', 'Тестовое сообщение', ["progressBar"=> true]);
+            return redirect('/settings/email')->withInput();
+        }
+
+        if (trim((string) ($settings->smtp_host ?? '')) === '') {
+            Toastr::error('Не указан SMTP host. Заполните SMTP-настройки и повторите попытку.', 'Тестовое сообщение', ["progressBar"=> true]);
+            return redirect('/settings/email')->withInput();
+        }
+
+        $title = 'Тестовое сообщение SMTP';
+        $body = 'Это тестовое письмо из настроек системы <b>'.e($settings->title).'</b>.<br>Если вы получили это письмо, SMTP настроен корректно.';
+
+        $email = new Email();
+        $email->send(
+            $title,
+            $body,
+            (string) $validated['test_email'],
+            (string) ($settings->mail_from_name ?: $settings->title),
+            [
+                'category' => MailDeliveryFailure::CATEGORY_SYSTEM,
+                'mail_type' => 'settings_test',
+                'recipient_name' => (string) ($user->fio ?? ''),
+                'triggered_by_employee_id' => isset($user->id) ? (int) $user->id : null,
+                'meta' => [
+                    'source' => 'settings_email_test_button',
+                ],
+            ]
+        );
+
+        Toastr::success('Запрос на отправку тестового письма выполнен. Проверьте почту и, при необходимости, журнал ошибок доставки ниже.', 'Тестовое сообщение', ["progressBar"=> true]);
+
+        return redirect('/settings/email');
     }
     }
 

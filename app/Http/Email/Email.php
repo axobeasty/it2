@@ -4,10 +4,11 @@ namespace App\Http\Email;
 
 use App\Models\MailDeliveryFailure;
 use App\Models\Settings;
-use Exception;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
+use PHPMailer\PHPMailer\Exception as PHPMailerException;
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 
 class Email
 {
@@ -70,10 +71,10 @@ class Email
             return;
         }
 
-        $mail = new PHPMailer(false);
+        $mail = new PHPMailer(true);
         try {
             $mail->CharSet = PHPMailer::CHARSET_UTF8;
-            $mail->SMTPDebug = config('app.debug') ? 2 : 0;
+            $mail->SMTPDebug = config('app.debug') ? SMTP::DEBUG_SERVER : SMTP::DEBUG_OFF;
             $mail->isSMTP();
             $mail->Host = $host;
 
@@ -105,12 +106,12 @@ class Email
             $mail->Password = $password;
 
             $encryption = strtolower(trim((string) ($settings->smtp_encryption ?? 'tls')));
-            if ($encryption === 'ssl') {
-                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-                $mail->SMTPAutoTLS = true;
-            } elseif ($encryption === 'none' || $encryption === '') {
+            if ($encryption === 'none' || $encryption === '') {
                 $mail->SMTPAutoTLS = false;
                 $mail->SMTPSecure = '';
+            } elseif ($encryption === 'ssl') {
+                $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+                $mail->SMTPAutoTLS = true;
             } else {
                 $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
                 $mail->SMTPAutoTLS = true;
@@ -118,15 +119,15 @@ class Email
 
             $port = (int) ($settings->smtp_port ?? 0);
             if ($port <= 0) {
-                $port = $encryption === 'ssl' ? 465 : ($encryption === 'none' ? 25 : 587);
+                $port = $encryption === 'ssl' ? 465 : 25;
             }
             $mail->Port = $port;
 
             $mail->SMTPOptions = [
                 'ssl' => [
-                    'verify_peer' => true,
-                    'verify_peer_name' => true,
-                    'allow_self_signed' => false,
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true,
                 ],
             ];
 
@@ -140,14 +141,14 @@ class Email
             }
 
             $mail->setFrom($fromAddr, $fromName);
-            $mail->addAddress($address);
+            $mail->addAddress($address, $name);
 
             $mail->isHTML(true);
             $mail->Subject = $title;
             $mail->Body = '<html>'.$body.'</html>';
 
             $mail->send();
-        } catch (Exception $e) {
+        } catch (PHPMailerException $e) {
             Log::error('Почта: ошибка отправки', [
                 'mailer' => $mail->ErrorInfo,
                 'exception' => $e->getMessage(),
