@@ -52,6 +52,23 @@
                             <input type="number" name="sort_order" class="form-control @error('sort_order') is-invalid @enderror" value="{{ old('sort_order', 0) }}" min="0">
                             @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Доступ к просмотру (роли)</label>
+                            <div class="form-text mb-2">Если ничего не выбрано — статью видят все с правом «Wiki: просмотр». Если выбраны роли — только они (плюс редакторы wiki).</div>
+                            <div class="border rounded-3 p-3 bg-light @error('role_ids') border-danger @enderror" style="max-height: 220px; overflow-y: auto;">
+                                @forelse($allRoles as $role)
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="role_ids[]" value="{{ $role->id }}" id="wiki_role_create_{{ $role->id }}"
+                                            @checked(in_array((int) $role->id, array_map('intval', (array) old('role_ids', [])), true))>
+                                        <label class="form-check-label" for="wiki_role_create_{{ $role->id }}">{{ $role->name }}</label>
+                                    </div>
+                                @empty
+                                    <p class="text-muted small mb-0">В системе нет ролей.</p>
+                                @endforelse
+                            </div>
+                            @error('role_ids')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                            @error('role_ids.*')<div class="invalid-feedback d-block">{{ $message }}</div>@enderror
+                        </div>
                         <div class="mb-4">
                             <label class="form-label">Текст (Markdown)</label>
                             <textarea name="body" class="form-control font-monospace @error('body') is-invalid @enderror" rows="18" placeholder="# Заголовок&#10;&#10;Текст, **жирный**, списки, [ссылка](https://...)">{{ old('body') }}</textarea>

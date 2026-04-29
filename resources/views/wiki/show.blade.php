@@ -28,12 +28,21 @@
                     <ol class="breadcrumb small mb-0">
                         <li class="breadcrumb-item"><a href="{{ route('wiki.index') }}">База знаний</a></li>
                         @if($page->parent)
-                            <li class="breadcrumb-item"><a href="{{ route('wiki.show', $page->parent->slug) }}">{{ $page->parent->title }}</a></li>
+                            <li class="breadcrumb-item {{ $parentReadable ?? false ? '' : 'text-muted' }}">
+                                @if($parentReadable ?? false)
+                                    <a href="{{ route('wiki.show', $page->parent->slug) }}">{{ $page->parent->title }}</a>
+                                @else
+                                    <span title="Нет доступа к родительской странице">{{ $page->parent->title }}</span>
+                                @endif
+                            </li>
                         @endif
                         <li class="breadcrumb-item active" aria-current="page">{{ $page->title }}</li>
                     </ol>
                 </nav>
 
+                @if($canEdit && $page->roles->isNotEmpty())
+                    <p class="small text-muted mb-2"><i class="bi bi-shield-lock me-1"></i>Просмотр только для ролей: {{ $page->roles->pluck('name')->join(', ') }}</p>
+                @endif
                 <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
                     <h1 class="wiki-header-title">{{ $page->title }}</h1>
                     <div class="d-flex flex-wrap gap-2">

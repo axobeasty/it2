@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Roles;
 use App\Models\Settings;
 use App\Models\WikiPage;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 
@@ -22,16 +24,15 @@ class WikiController extends Controller
         $user = $request->session()->get('user');
         $settings = Settings::query()->find(1);
 
-        $roots = WikiPage::query()
-            ->with(['children' => fn ($q) => $q->orderBy('sort_order')->orderBy('title')])
-            ->whereNull('parent_id')
+        $allVisible = WikiPage::query()
+            ->with('roles')
+            ->visibleToWikiReader($user)
             ->orderBy('sort_order')
             ->orderBy('title')
             ->get();
 
-        $flatForNav = WikiPage::query()
-            ->orderBy('title')
-            ->get(['id', 'title', 'slug', 'parent_id']);
+        $roots = $this->buildWikiForestFromVisiblePages($allVisible);
+        $flatForNav = $allVisible->sortBy('title')->values();
 
         return view('wiki.index', [
             'user' => $user,
@@ -42,28 +43,36 @@ class WikiController extends Controller
         ]);
     }
 
-    public function show(Request $request, string $slug): View
+    public function show(Request $request, string $slug): View|RedirectResponse
     {
         $user = $request->session()->get('user');
         $settings = Settings::query()->find(1);
 
         $page = WikiPage::query()
-            ->with(['parent', 'creator', 'editor'])
+            ->with(['parent.roles', 'creator', 'editor', 'roles'])
             ->where('slug', $slug)
             ->firstOrFail();
 
-        $flatForNav = WikiPage::query()
-            ->orderBy('title')
-            ->get(['id', 'title', 'slug', 'parent_id']);
+        if (! $page->isReadableByWikiReader($user)) {
+            Toastr::error('У вас нет доступа к этой статье.', 'База знаний', ['progressBar' => true]);
 
-        $sidebarRoots = WikiPage::query()
-            ->with(['children' => fn ($q) => $q->orderBy('sort_order')->orderBy('title')])
-            ->whereNull('parent_id')
+            return redirect()->route('wiki.index');
+        }
+
+        $allVisible = WikiPage::query()
+            ->with('roles')
+            ->visibleToWikiReader($user)
             ->orderBy('sort_order')
             ->orderBy('title')
             ->get();
 
+        $sidebarRoots = $this->buildWikiForestFromVisiblePages($allVisible);
+        $flatForNav = $allVisible->sortBy('title')->values();
+
         $html = Str::markdown((string) $page->body);
+
+        $parentReadable = $page->parent
+            && $page->parent->isReadableByWikiReader($user);
 
         return view('wiki.show', [
             'user' => $user,
@@ -73,6 +82,7 @@ class WikiController extends Controller
             'flatForNav' => $flatForNav,
             'sidebarRoots' => $sidebarRoots,
             'canEdit' => $user && $user->canAccessPage('knowledge_wiki_edit'),
+            'parentReadable' => $parentReadable,
         ]);
     }
 
@@ -87,12 +97,14 @@ class WikiController extends Controller
 
         $settings = Settings::query()->find(1);
         $parents = WikiPage::query()->orderBy('title')->get(['id', 'title', 'parent_id']);
+        $allRoles = $this->allRolesForWikiForms();
 
         return view('wiki.create', [
             'user' => $user,
             'settings' => $settings,
             'parents' => $parents,
             'page' => new WikiPage,
+            'allRoles' => $allRoles,
         ]);
     }
 
@@ -111,6 +123,8 @@ class WikiController extends Controller
             'body' => ['nullable', 'string', 'max:524288'],
             'parent_id' => ['nullable', 'integer', 'exists:wiki_pages,id'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'role_ids' => ['nullable', 'array'],
+            'role_ids.*' => ['integer', 'exists:roles,id'],
         ]);
 
         $parentId = isset($validated['parent_id']) ? (int) $validated['parent_id'] : null;
@@ -132,7 +146,7 @@ class WikiController extends Controller
 
         $slug = $this->ensureUniqueSlug($slug);
 
-        WikiPage::query()->create([
+        $page = WikiPage::query()->create([
             'title' => $validated['title'],
             'slug' => $slug,
             'body' => $validated['body'] ?? '',
@@ -141,6 +155,7 @@ class WikiController extends Controller
             'created_by' => $user->id,
             'updated_by' => $user->id,
         ]);
+        $page->roles()->sync($this->normalizedRoleIds($validated['role_ids'] ?? []));
 
         Toastr::success('Статья создана.', 'База знаний', ['progressBar' => true]);
 
@@ -157,17 +172,20 @@ class WikiController extends Controller
         }
 
         $page = WikiPage::query()->where('slug', $slug)->firstOrFail();
+        $page->load('roles');
         $settings = Settings::query()->find(1);
         $parents = WikiPage::query()
             ->where('id', '!=', $page->id)
             ->orderBy('title')
             ->get(['id', 'title', 'parent_id']);
+        $allRoles = $this->allRolesForWikiForms();
 
         return view('wiki.edit', [
             'user' => $user,
             'settings' => $settings,
             'page' => $page,
             'parents' => $parents,
+            'allRoles' => $allRoles,
         ]);
     }
 
@@ -188,6 +206,8 @@ class WikiController extends Controller
             'body' => ['nullable', 'string', 'max:524288'],
             'parent_id' => ['nullable', 'integer', 'exists:wiki_pages,id'],
             'sort_order' => ['nullable', 'integer', 'min:0', 'max:999999'],
+            'role_ids' => ['nullable', 'array'],
+            'role_ids.*' => ['integer', 'exists:roles,id'],
         ]);
 
         $parentId = isset($validated['parent_id']) ? (int) $validated['parent_id'] : null;
@@ -223,6 +243,7 @@ class WikiController extends Controller
             'updated_by' => $user->id,
         ]);
         $page->save();
+        $page->roles()->sync($this->normalizedRoleIds($validated['role_ids'] ?? []));
 
         Toastr::success('Статья сохранена.', 'База знаний', ['progressBar' => true]);
 
@@ -308,5 +329,62 @@ class WikiController extends Controller
         }
 
         return true;
+    }
+
+    /**
+     * @return Collection<int, Roles>
+     */
+    private function allRolesForWikiForms(): Collection
+    {
+        return Roles::query()->orderBy('name')->get();
+    }
+
+    /**
+     * @param  array<int, mixed>  $roleIds
+     * @return list<int>
+     */
+    private function normalizedRoleIds(array $roleIds): array
+    {
+        $ids = array_map('intval', $roleIds);
+        $ids = array_values(array_unique(array_filter($ids, fn (int $id) => $id > 0)));
+
+        return $ids;
+    }
+
+    /**
+     * Дерево только из страниц, уже отфильтрованных по правам читателя.
+     *
+     * @param  Collection<int, WikiPage>  $allVisible
+     * @return Collection<int, WikiPage>
+     */
+    private function buildWikiForestFromVisiblePages(Collection $allVisible): Collection
+    {
+        $visibleIds = $allVisible->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $roots = $allVisible
+            ->filter(function (WikiPage $p) use ($visibleIds) {
+                $pid = $p->parent_id !== null ? (int) $p->parent_id : null;
+
+                return $pid === null || ! in_array($pid, $visibleIds, true);
+            })
+            ->sortBy(['sort_order', 'title'])
+            ->values();
+
+        $buildChildren = function (int $parentId) use (&$buildChildren, $allVisible) {
+            return $allVisible
+                ->where('parent_id', $parentId)
+                ->sortBy(['sort_order', 'title'])
+                ->values()
+                ->map(function (WikiPage $node) use (&$buildChildren) {
+                    $node->setRelation('children', $buildChildren((int) $node->id));
+
+                    return $node;
+                });
+        };
+
+        foreach ($roots as $root) {
+            $root->setRelation('children', $buildChildren((int) $root->id));
+        }
+
+        return $roots;
     }
 }

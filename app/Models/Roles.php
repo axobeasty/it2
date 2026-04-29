@@ -20,4 +20,10 @@ class Roles extends Model
     {
         return $this->hasMany(Employee::class, 'role_id');
     }
+
+    public function wikiPages()
+    {
+        return $this->belongsToMany(WikiPage::class, 'wiki_page_role', 'role_id', 'wiki_page_id')
+            ->withTimestamps();
+    }
 }
