@@ -183,7 +183,12 @@ class StudentTestingController extends Controller
         $user = $request->session()->get('user');
         $settings = Settings::find(1);
         $groups = Groups::orderBy('name')->get();
-        $tests = Test::with(['questions', 'assignments.group'])->orderByDesc('created_at')->get();
+        $tests = Test::query()
+            ->withCount('questions')
+            ->with(['assignments.group'])
+            ->orderByDesc('created_at')
+            ->paginate(20)
+            ->withQueryString();
 
         return view('tests.admin', compact('user', 'settings', 'groups', 'tests'));
     }

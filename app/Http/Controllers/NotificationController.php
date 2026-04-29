@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 
 use App\Models\Notifs;
+use App\Support\RequestPerformanceCache;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class NotificationController extends Controller
 {
@@ -26,17 +28,18 @@ class NotificationController extends Controller
     {
         try{
             $user = $request->session()->get('user');
-            $notifs = Notifs::where('employee_id',$user->id)->get();
-            foreach ($notifs as $notif) {
-                $notif->is_read = 1;
-                $notif->save();
-            }
+            Notifs::query()
+                ->where('employee_id', (int) $user->id)
+                ->update(['is_read' => true]);
+            RequestPerformanceCache::forgetNotifUnreadCount((int) $user->id);
             Toastr::success('Все уведомления отмечены как прочитанные!', 'Успешно', ["progressBar"=> true]);
         }catch (\Exception $exception){
-            dd($exception);
+            Log::error('notifications.mark_all_read_failed', [
+                'message' => $exception->getMessage(),
+            ]);
+            Toastr::error('Не удалось обновить уведомления.', 'Ошибка', ['progressBar' => true]);
         }
-        finally{
-            return redirect()->back();
-        }
+
+        return redirect()->back();
     }
 }

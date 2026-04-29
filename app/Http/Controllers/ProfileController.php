@@ -7,6 +7,7 @@ use App\Models\Portfolio;
 use App\Models\PortfolioRoles;
 use App\Models\PortfolioTypes;
 use App\Models\Settings;
+use App\Support\RequestPerformanceCache;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -54,6 +55,7 @@ class ProfileController extends Controller
 
         $employee->password = Hash::make($validated['password']);
         $employee->save();
+        RequestPerformanceCache::forgetEmployeePageAccess((int) $employee->id);
 
         $fresh = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
             ->findOrFail($employee->id);
@@ -77,6 +79,7 @@ class ProfileController extends Controller
         $employee = Employee::findOrFail($sessionUser->id);
         $employee->email_notifications = $receive;
         $employee->save();
+        RequestPerformanceCache::forgetEmployeePageAccess((int) $employee->id);
 
         $fresh = Employee::with(['role.pagePermissions', 'department', 'group', 'faculty', 'chair'])
             ->findOrFail($employee->id);

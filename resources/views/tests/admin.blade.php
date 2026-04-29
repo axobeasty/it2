@@ -81,7 +81,7 @@
                 @forelse($tests as $test)
                     <tr>
                         <td>{{ $test->title }}</td>
-                        <td>{{ $test->questions->count() }}</td>
+                        <td>{{ $test->questions_count }}</td>
                         <td>
                             <div class="small">Время: {{ $test->time_limit_minutes ? $test->time_limit_minutes . ' мин' : 'без лимита' }}</div>
                             <div class="small">Попытки: {{ $test->attempts_limit ? $test->attempts_limit : 'без лимита' }}</div>
@@ -106,6 +106,11 @@
                 </tbody>
             </table>
         </div>
+        @if(method_exists($tests, 'links'))
+            <div class="d-flex justify-content-center mt-3">
+                {{ $tests->links() }}
+            </div>
+        @endif
     </div>
 </div>
 

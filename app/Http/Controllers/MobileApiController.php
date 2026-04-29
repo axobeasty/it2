@@ -10,6 +10,7 @@ use App\Models\Notifs;
 use App\Models\Test;
 use App\Models\TestAttempt;
 use App\Support\MobileTestTaking;
+use App\Support\RequestPerformanceCache;
 use App\Support\TestSubmissionNotifier;
 use App\Support\TestGrading;
 use App\Support\TestingStatsCollector;
@@ -30,14 +31,34 @@ class MobileApiController extends Controller
     public function health(): JsonResponse
     {
         try {
-            DB::purge('mysql_remote');
-            DB::connection('mysql_remote')->select('SELECT 1');
+            $ok = Cache::remember(
+                RequestPerformanceCache::REMOTE_DB_HEALTH_KEY,
+                RequestPerformanceCache::REMOTE_DB_HEALTH_TTL_SECONDS,
+                static function (): bool {
+                    try {
+                        DB::purge('mysql_remote');
+                        DB::connection('mysql_remote')->select('SELECT 1');
+
+                        return true;
+                    } catch (\Throwable) {
+                        return false;
+                    }
+                }
+            );
+
+            if ($ok) {
+                return response()->json([
+                    'ok' => true,
+                    'maintenance' => false,
+                    'message' => 'Сервис доступен.',
+                ]);
+            }
 
             return response()->json([
-                'ok' => true,
-                'maintenance' => false,
-                'message' => 'Сервис доступен.',
-            ]);
+                'ok' => false,
+                'maintenance' => true,
+                'message' => 'Сервис временно недоступен. Проводятся технические работы.',
+            ], 503);
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,

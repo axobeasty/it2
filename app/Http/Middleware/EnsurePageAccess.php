@@ -4,9 +4,11 @@ namespace App\Http\Middleware;
 
 use App\Models\Employee;
 use App\Support\PageAccess;
+use App\Support\RequestPerformanceCache;
 use Brian2694\Toastr\Facades\Toastr;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsurePageAccess
@@ -35,8 +37,21 @@ class EnsurePageAccess
             return redirect('/');
         }
 
-        $freshUser = Employee::with('role.pagePermissions')->find($sessionUser->id);
+        $userId = (int) $sessionUser->id;
+        $cacheKey = RequestPerformanceCache::employeePageAccessKey($userId);
+        $freshUser = Cache::get($cacheKey);
+        if (! $freshUser instanceof Employee) {
+            $freshUser = Employee::with('role.pagePermissions')->find($userId);
+            if ($freshUser) {
+                Cache::put(
+                    $cacheKey,
+                    $freshUser,
+                    RequestPerformanceCache::EMPLOYEE_PAGE_ACCESS_TTL_SECONDS
+                );
+            }
+        }
         if (! $freshUser) {
+            Cache::forget($cacheKey);
             $request->session()->forget('user');
             Toastr::error('Сессия недействительна', 'Войдите в систему снова.', ['progressBar' => true]);
             return redirect('/');
@@ -45,7 +60,7 @@ class EnsurePageAccess
         $user = $freshUser;
         $request->session()->put('user', $user);
 
-        $pageKey = PageAccess::pathToPageKey($request->path());
+        $pageKey = PageAccess::pathToPageKey($request->path(), $request->method());
         if (! $pageKey) {
             $normalizedPath = '/'.ltrim($request->path(), '/');
             // Fail-closed for settings endpoints: if route is not mapped to a permission key,

@@ -11,6 +11,7 @@ use App\Models\Faculty;
 use App\Models\Chair;
 use App\Models\Roles;
 use App\Models\Settings;
+use App\Support\RequestPerformanceCache;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -144,6 +145,7 @@ class EmployeeController extends Controller
                     $editer->active = $request->boolean('active') ? 1 : 0;
                     $this->applyStudentFields($editer, $request);
                     $editer->save();
+                    RequestPerformanceCache::forgetEmployeePageAccess((int) $editer->id);
                     Toastr::success('Успешно', 'Профиль успешно изменен', ["progressBar"=> true]);
                     Toastr::warning('Внимание!', 'Вы изменили собственный профиль, поэтому Вам необходимо авторизоваться повторно!', ["progressBar"=> true]);
                     return redirect('/');
@@ -180,6 +182,7 @@ class EmployeeController extends Controller
                     $editer->active = $request->boolean('active') ? 1 : 0;
                     $this->applyStudentFields($editer, $request);
                     $editer->save();
+                    RequestPerformanceCache::forgetEmployeePageAccess((int) $editer->id);
                     Toastr::success('Успешно', 'Профиль успешно изменен', ["progressBar"=> true]);
 
                     return redirect()->back();
@@ -201,6 +204,7 @@ class EmployeeController extends Controller
                $editor = Employee::where('id',$id)->first();
                $editor->active = 0;
                $editor->save();
+               RequestPerformanceCache::forgetEmployeePageAccess((int) $editor->id);
                Toastr::success('Успешно', 'Профиль успешно диактивирован', ["progressBar"=> true]);
                return redirect()->back();
            }else{
@@ -218,6 +222,7 @@ class EmployeeController extends Controller
                 $editor = Employee::where('id',$id)->first();
                 $editor->active = 1;
                 $editor->save();
+                RequestPerformanceCache::forgetEmployeePageAccess((int) $editor->id);
                 Toastr::success('Успешно', 'Профиль успешно активирован', ["progressBar"=> true]);
                 return redirect()->back();
             }else{
@@ -232,6 +237,7 @@ class EmployeeController extends Controller
        if($request->session()->has('user')){
            $user = $request->session()->get('user');
            if($user->canAccessPage('employees_manage')){
+               RequestPerformanceCache::forgetEmployeePageAccess((int) $id);
                $del = Employee::where('id',$id)->delete();
                return redirect()->back();
            }else{
@@ -256,6 +262,7 @@ class EmployeeController extends Controller
             if($profile->id.$profile->login.$profile->email === Crypt::decryptString($code)){
                 $profile->active = 1;
                 $profile->save();
+                RequestPerformanceCache::forgetEmployeePageAccess((int) $profile->id);
                 Toastr::success('Ваш профиль успешно активирован.', 'Активация профиля.', ["progressBar"=> true]);
                 return redirect('/');
             }else{

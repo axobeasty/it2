@@ -3,9 +3,11 @@
 namespace App\Providers;
 
 use App\Models\Notifs;
+use App\Support\RequestPerformanceCache;
 use Carbon\Carbon;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -38,23 +40,38 @@ class AppServiceProvider extends ServiceProvider
             $user = $view->offsetGet('user') ?? null;
             $unread = 0;
             if ($user && isset($user->id)) {
-                $unread = Notifs::query()
-                    ->where('employee_id', (int) $user->id)
-                    ->where('is_read', false)
-                    ->count();
+                $unread = (int) Cache::remember(
+                    RequestPerformanceCache::notifUnreadKey((int) $user->id),
+                    RequestPerformanceCache::NOTIF_UNREAD_TTL_SECONDS,
+                    static fn (): int => (int) Notifs::query()
+                        ->where('employee_id', (int) $user->id)
+                        ->where('is_read', false)
+                        ->count()
+                );
             }
             $view->with('unreadNotifsCount', $unread);
         });
 
-        $activeProfile = (string) env('DB_ACTIVE_PROFILE', 'sqlite');
-        if ($activeProfile !== 'remote') {
+        if ((string) config('database.active_profile') !== 'remote') {
             return;
         }
 
-        try {
-            DB::purge('mysql_remote');
-            DB::connection('mysql_remote')->select('SELECT 1');
-        } catch (\Throwable $e) {
+        $remoteOk = Cache::remember(
+            RequestPerformanceCache::REMOTE_DB_HEALTH_KEY,
+            RequestPerformanceCache::REMOTE_DB_HEALTH_TTL_SECONDS,
+            static function (): bool {
+                try {
+                    DB::purge('mysql_remote');
+                    DB::connection('mysql_remote')->select('SELECT 1');
+
+                    return true;
+                } catch (\Throwable) {
+                    return false;
+                }
+            }
+        );
+
+        if (! $remoteOk) {
             // Мягкий деградирующий режим: если remote нестабилен,
             // не даем приложению упасть на каждом запросе.
             Config::set('database.default', 'sqlite');

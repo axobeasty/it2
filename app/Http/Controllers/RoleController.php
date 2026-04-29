@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Roles;
 use App\Support\PageAccess;
+use App\Support\RequestPerformanceCache;
 use Brian2694\Toastr\Facades\Toastr;
 use Illuminate\Http\Request;
 
@@ -81,5 +82,7 @@ class RoleController extends Controller
         foreach ($filtered as $pageKey) {
             $role->pagePermissions()->create(['page_key' => $pageKey]);
         }
+
+        RequestPerformanceCache::forgetEmployeePageAccessMany($role->employees()->pluck('id'));
     }
 }

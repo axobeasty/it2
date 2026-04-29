@@ -86,8 +86,8 @@ class PageAccess
         'schedule_teacher' => 'Расписание: просмотр (преподаватель)',
         'schedule_constructor' => 'Расписание: конструктор (редактирование)',
         'schedule_constructor_settings' => 'Расписание: настройки конструктора',
-        'knowledge_wiki' => 'База знаний (чтение)',
-        'knowledge_wiki_edit' => 'База знаний (редактирование)',
+        'knowledge_wiki' => 'Wiki: просмотр статей',
+        'knowledge_wiki_edit' => 'Wiki: создание и правка статей',
         'maintenance_bypass' => 'Доступ при отключённом сайте (техобслуживание)',
     ];
 
@@ -101,6 +101,7 @@ class PageAccess
         $labels = self::LABELS;
         $groups = [
             'Главная и ежедневная работа' => ['dashboard', 'notifications', 'tasks'],
+            'База знаний (wiki)' => ['knowledge_wiki', 'knowledge_wiki_edit'],
             'Заявки' => ['orders_my', 'orders_admin'],
             'Инвентарь' => ['inventory_my', 'inventory_admin'],
             'Пользователи, роли и группы' => ['employees_manage', 'roles_manage', 'groups_manage'],
@@ -109,7 +110,6 @@ class PageAccess
             'Расписание: просмотр' => ['schedule_my', 'schedule_teacher'],
             'Расписание: конструктор и настройки' => ['schedule_constructor', 'schedule_constructor_settings'],
             'Портфолио' => ['portfolio', 'portfolio_types', 'portfolio_confirm'],
-            'База знаний' => ['knowledge_wiki', 'knowledge_wiki_edit'],
             'Настройки системы' => ['settings', 'settings_database'],
             'Безопасность и обслуживание' => ['password_manager', 'maintenance_bypass'],
         ];
@@ -143,11 +143,17 @@ class PageAccess
         return $result;
     }
 
-    public static function pathToPageKey(string $path): ?string
+    public static function pathToPageKey(string $path, ?string $httpMethod = null): ?string
     {
         $normalized = '/'.ltrim($path, '/');
         if ($normalized === '//') {
             $normalized = '/';
+        }
+
+        $method = strtoupper($httpMethod ?? 'GET');
+        // PATCH/DELETE по /wiki/{slug} — не чтение, а изменение (иначе хватало бы только knowledge_wiki).
+        if (preg_match('#^/wiki/[^/]+$#', $normalized) && in_array($method, ['PATCH', 'DELETE'], true)) {
+            return 'knowledge_wiki_edit';
         }
 
         foreach (self::MAP as $pageKey => $patterns) {
@@ -168,7 +174,13 @@ class PageAccess
 
     private static function matches(string $path, string $pattern): bool
     {
-        $regex = preg_replace('/\{[^}]+\}/', '[^\/]+', preg_quote($pattern, '/'));
-        return (bool) preg_match('/^'.$regex.'$/', $path);
+        // Нельзя сначала preg_quote всего паттерна: скобки {id} превратятся в \{id\},
+        // и плейсхолдеры перестанут подставляться.
+        $token = 'ZZZPATHSEGZZZ';
+        $tmp = preg_replace('/\{[^}]+\}/', $token, $pattern);
+        $quoted = preg_quote($tmp, '/');
+        $regex = str_replace(preg_quote($token, '/'), '[^/]+', $quoted);
+
+        return (bool) preg_match('#^'.$regex.'$#', $path);
     }
 }

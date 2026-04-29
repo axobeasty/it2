@@ -59,7 +59,7 @@ class InventoryController extends Controller
                     ->orderBy('employees_id')
                     ->orderBy('id')
                     ->get();
-                $employees = Employee::all();
+                $employees = Employee::query()->orderBy('fio')->get(['id', 'fio']);
                 $groupedByEmployee = $numbers->groupBy('employees_id');
 
                 return view('inventory.manage', compact('user','settings','employees','numbers','groupedByEmployee', 'employeePages'));
@@ -450,7 +450,7 @@ class InventoryController extends Controller
             if($user->canAccessPage('inventory_admin') ){
                 $departs = Department::all();
                 $O_categories = O_Categories::all();
-                $contingent = Employee::all();
+                $contingent = Employee::query()->orderBy('fio')->get(['id', 'fio', 'department_id']);
 
                 return view('inventory.departments', compact('user','departs','settings','O_categories','contingent'));
             }else{
@@ -469,7 +469,6 @@ class InventoryController extends Controller
         $user = $request->session()->get('user');
         if($request->session()->has('user')){
             if($user->canAccessPage('inventory_admin') ){
-                $contingent = Employee::all();
                 $new = new Department();
                 $new->title = $request->title;
                 $new ->save();

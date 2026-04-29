@@ -84,6 +84,12 @@ test('page access map includes wiki paths in correct order', function () {
     expect($read)->toContain('/wiki/{slug}');
 });
 
+test('wiki article update and delete require edit permission key', function () {
+    expect(PageAccess::pathToPageKey('wiki/my-article', 'GET'))->toBe('knowledge_wiki');
+    expect(PageAccess::pathToPageKey('wiki/my-article', 'PATCH'))->toBe('knowledge_wiki_edit');
+    expect(PageAccess::pathToPageKey('wiki/my-article', 'DELETE'))->toBe('knowledge_wiki_edit');
+});
+
 test('page access map contains all sensitive settings endpoints', function () {
     $settings = PageAccess::MAP['settings'] ?? [];
     $settingsDb = PageAccess::MAP['settings_database'] ?? [];

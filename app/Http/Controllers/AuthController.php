@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\GroupScheduleEntry;
 use App\Models\Notifs;
 use App\Models\Settings;
+use App\Support\RequestPerformanceCache;
 use App\Models\Task;
 use Brian2694\Toastr\Facades\Toastr;
 use Carbon\Carbon;
@@ -274,6 +275,11 @@ class AuthController extends Controller
     public function logout(Request $request){
         $settings = Settings::where('id',1)->first();
         if($request->session()->has('user')){
+            $sessionUser = $request->session()->get('user');
+            if ($sessionUser && isset($sessionUser->id)) {
+                RequestPerformanceCache::forgetEmployeePageAccess((int) $sessionUser->id);
+                RequestPerformanceCache::forgetNotifUnreadCount((int) $sessionUser->id);
+            }
             $request->session()->forget('user');
         }else{
             return view('index',compact('settings'));
