@@ -17,32 +17,6 @@
                 </div>
 
                 <div class="mb-4">
-                    <div class="settings-section-title">Доступность</div>
-                    <label class="settings-field-label d-block">Техническое обслуживание</label>
-                    <div class="d-flex flex-wrap align-items-center gap-2">
-                        @if($settings->is_enabled == 1)
-                            <form action="/settings/general/site/disable" method="post" class="d-inline">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="btn btn-outline-danger rounded-pill px-4">
-                                    <i class="bi bi-power me-1"></i> Выключить сайт
-                                </button>
-                            </form>
-                            <span class="small text-success"><i class="bi bi-check-circle-fill me-1"></i>Сайт открыт для пользователей</span>
-                        @else
-                            <form action="/settings/general/site/enable" method="post" class="d-inline">
-                                @csrf
-                                @method('PATCH')
-                                <button type="submit" class="btn btn-success rounded-pill px-4">
-                                    <i class="bi bi-play-fill me-1"></i> Включить сайт
-                                </button>
-                            </form>
-                            <span class="small text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>Сайт в режиме обслуживания</span>
-                        @endif
-                    </div>
-                </div>
-
-                <div class="mb-4">
                     <label for="settings-disable-reason" class="settings-field-label">Текст при отключении</label>
                     <textarea class="form-control rounded-3" name="disable_reason" id="settings-disable-reason" rows="3" placeholder="Сообщение на странице заглушки">{{ $settings->disable_reason }}</textarea>
                 </div>
@@ -51,6 +25,32 @@
                     <i class="bi bi-check2 me-1"></i> Сохранить изменения
                 </button>
             </form>
+
+            <div class="mb-4 mt-4">
+                <div class="settings-section-title">Доступность</div>
+                <label class="settings-field-label d-block">Техническое обслуживание</label>
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    @if($settings->is_enabled == 1)
+                        <form action="/settings/general/site/disable" method="post" class="d-inline">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="btn btn-outline-danger rounded-pill px-4">
+                                <i class="bi bi-power me-1"></i> Выключить сайт
+                            </button>
+                        </form>
+                        <span class="small text-success"><i class="bi bi-check-circle-fill me-1"></i>Сайт открыт для пользователей</span>
+                    @else
+                        <form action="/settings/general/site/enable" method="post" class="d-inline">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="btn btn-success rounded-pill px-4">
+                                <i class="bi bi-play-fill me-1"></i> Включить сайт
+                            </button>
+                        </form>
+                        <span class="small text-warning"><i class="bi bi-exclamation-triangle-fill me-1"></i>Сайт в режиме обслуживания</span>
+                    @endif
+                </div>
+            </div>
 
             <hr class="my-5 opacity-25">
 
