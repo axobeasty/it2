@@ -21,23 +21,12 @@
         }
 
         main {
-            min-height: 0;
-            overflow-y: auto;
             padding: 1rem 1.25rem 1.5rem;
-            -webkit-overflow-scrolling: touch;
         }
 
         @media (min-width: 992px) {
             main {
-                height: calc(100vh - 40px);
                 padding: 1.5rem;
-            }
-        }
-
-        @media (max-width: 991.98px) {
-            main {
-                max-height: none;
-                height: auto;
             }
         }
 
@@ -93,25 +82,15 @@
         }
 
         .notification-panel {
-            overflow-y: auto;
             border-radius: 12px;
             background: #ffffff;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
             padding: 1.25rem;
-            -webkit-overflow-scrolling: touch;
         }
 
         @media (min-width: 992px) {
             .notification-panel {
-                height: calc(100vh - 40px);
                 padding: 1.5rem;
-            }
-        }
-
-        @media (max-width: 991.98px) {
-            .notification-panel {
-                max-height: none;
-                min-height: 12rem;
             }
         }
 
@@ -152,14 +131,14 @@
 
         @media (min-width: 992px) {
             .app-shell {
-                height: 100vh;
+                min-height: 100vh;
             }
         }
     </style>
 </head>
 <body>
 <div class="container-fluid p-0 app-shell">
-    <div class="row g-0">
+    <div class="row g-0 align-items-lg-start">
         <div class="col-12 p-0">
             @include('layout.nav')
         </div>
