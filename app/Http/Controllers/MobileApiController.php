@@ -6,9 +6,17 @@ use App\Models\Employee;
 use App\Models\Faculty;
 use App\Models\GroupScheduleEntry;
 use App\Models\Groups;
+use App\Models\InvNumbers;
 use App\Models\Notifs;
+use App\Models\O_Categories;
+use App\Models\Orders;
+use App\Models\RolePagePermission;
+use App\Models\Roles;
+use App\Models\Settings;
 use App\Models\Test;
 use App\Models\TestAttempt;
+use App\Models\WikiPage;
+use App\Support\PageAccess;
 use App\Support\MobileTestTaking;
 use App\Support\RequestPerformanceCache;
 use App\Support\TestSubmissionNotifier;
@@ -194,6 +202,792 @@ class MobileApiController extends Controller
 
         return response()->json([
             'items' => $items,
+        ]);
+    }
+
+    /**
+     * Список статей wiki, доступных текущему пользователю.
+     * GET /api/mobile/wiki
+     */
+    public function wikiList(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+
+        if (! $employee->canAccessPage('knowledge_wiki') && ! $employee->canAccessPage('knowledge_wiki_edit')) {
+            return response()->json(['message' => 'Нет доступа к базе знаний.'], 403);
+        }
+
+        $pages = WikiPage::query()
+            ->with('roles')
+            ->visibleToWikiReader($employee)
+            ->orderBy('sort_order')
+            ->orderBy('title')
+            ->get(['id', 'title', 'slug', 'parent_id', 'sort_order', 'updated_at']);
+
+        return response()->json([
+            'items' => $pages->map(function (WikiPage $page) {
+                return [
+                    'id' => (int) $page->id,
+                    'title' => (string) $page->title,
+                    'slug' => (string) $page->slug,
+                    'parent_id' => $page->parent_id !== null ? (int) $page->parent_id : null,
+                    'sort_order' => (int) $page->sort_order,
+                    'updated_at' => $page->updated_at?->toIso8601String(),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Просмотр одной статьи wiki.
+     * GET /api/mobile/wiki/{slug}
+     */
+    public function wikiShow(Request $request, string $slug): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+
+        $page = WikiPage::query()
+            ->with(['roles', 'creator', 'editor'])
+            ->where('slug', $slug)
+            ->first();
+
+        if (! $page) {
+            return response()->json(['message' => 'Статья не найдена.'], 404);
+        }
+
+        if (! $page->isReadableByWikiReader($employee)) {
+            return response()->json(['message' => 'Нет доступа к статье.'], 403);
+        }
+
+        return response()->json([
+            'page' => [
+                'id' => (int) $page->id,
+                'title' => (string) $page->title,
+                'slug' => (string) $page->slug,
+                'body' => (string) $page->body,
+                'updated_at' => $page->updated_at?->toIso8601String(),
+                'updated_by' => $page->editor?->fio,
+            ],
+        ]);
+    }
+
+    /**
+     * Категории заявок.
+     * GET /api/mobile/orders/categories
+     */
+    public function ordersCategories(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+
+        $items = O_Categories::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'cat_color']);
+
+        return response()->json([
+            'items' => $items->map(function (O_Categories $cat) {
+                return [
+                    'id' => (int) $cat->id,
+                    'name' => (string) $cat->name,
+                    'color' => (string) ($cat->cat_color ?? '#0d6efd'),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Мои заявки (или все для админа).
+     * GET /api/mobile/orders/my
+     */
+    public function ordersMy(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+
+        $isAdmin = $employee->canAccessPage('orders_admin');
+        $query = Orders::query()->with(['category:id,name,cat_color', 'employee:id,fio']);
+        if (! $isAdmin) {
+            if (! $employee->canAccessPage('orders_my')) {
+                return response()->json(['message' => 'Нет доступа к заявкам.'], 403);
+            }
+            $query->where('employee_id', $employee->id);
+        }
+
+        $orders = $query->orderByDesc('id')->limit(200)->get();
+        return response()->json([
+            'items' => $orders->map(function (Orders $order) {
+                return [
+                    'id' => (int) $order->id,
+                    'description' => (string) $order->description,
+                    'status' => (int) $order->status,
+                    'category_id' => (int) $order->category_id,
+                    'category_name' => (string) optional($order->category)->name,
+                    'employee_id' => (int) $order->employee_id,
+                    'employee_fio' => (string) optional($order->employee)->fio,
+                    'room' => (string) ($order->room ?? ''),
+                    'created_at' => $order->created_at?->toIso8601String(),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Создание заявки.
+     * POST /api/mobile/orders/create
+     */
+    public function ordersCreate(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('orders_my')) {
+            return response()->json(['message' => 'Нет доступа к созданию заявки.'], 403);
+        }
+
+        $validated = $request->validate([
+            'description' => ['required', 'string', 'max:1000'],
+            'category_id' => ['required', 'integer', 'exists:o__categories,id'],
+            'room' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $order = Orders::query()->create([
+            'employee_id' => $employee->id,
+            'description' => $validated['description'],
+            'category_id' => (int) $validated['category_id'],
+            'room' => (string) ($validated['room'] ?? ''),
+            'status' => 0,
+        ]);
+
+        Notifs::create([
+            'title' => 'Заявка зарегистрирована',
+            'message' => 'Ваша заявка успешно зарегистрирована в системе под идентификатором '.$order->id.'.',
+            'employee_id' => $employee->id,
+        ]);
+
+        return response()->json([
+            'message' => 'Заявка создана.',
+            'id' => (int) $order->id,
+        ], 201);
+    }
+
+    /**
+     * Изменение статуса заявки (админ).
+     * PATCH /api/mobile/orders/{id}/status/{code}
+     */
+    public function ordersSetStatus(Request $request, int $id, int $code): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('orders_admin')) {
+            return response()->json(['message' => 'Нет доступа к изменению статуса заявки.'], 403);
+        }
+        if (! in_array($code, [0, 1, 2, 3], true)) {
+            return response()->json(['message' => 'Некорректный код статуса.'], 422);
+        }
+
+        $order = Orders::query()->find($id);
+        if (! $order) {
+            return response()->json(['message' => 'Заявка не найдена.'], 404);
+        }
+
+        $order->status = $code;
+        $order->save();
+
+        return response()->json([
+            'message' => 'Статус заявки обновлён.',
+            'id' => (int) $order->id,
+            'status' => (int) $order->status,
+        ]);
+    }
+
+    /**
+     * Мой текущий инвентарь.
+     * GET /api/mobile/inventory/my
+     */
+    public function inventoryMy(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('inventory_my') && ! $employee->canAccessPage('inventory_admin')) {
+            return response()->json(['message' => 'Нет доступа к инвентарю.'], 403);
+        }
+
+        $items = InvNumbers::query()
+            ->with(['store.type'])
+            ->where('employees_id', $employee->id)
+            ->whereNull('date_out')
+            ->orderByDesc('date_in')
+            ->get();
+
+        return response()->json([
+            'items' => $items->map(function (InvNumbers $item) {
+                return [
+                    'id' => (int) $item->id,
+                    'name' => (string) optional($item->store)->name,
+                    'inventory_number' => (string) ($item->number ?? ''),
+                    'type' => (string) optional(optional($item->store)->type)->name,
+                    'room' => (string) ($item->room ?? ''),
+                    'date_in' => (string) ($item->date_in ?? ''),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Активные закрепления инвентаря по сотрудникам (админ).
+     * GET /api/mobile/inventory/manage
+     */
+    public function inventoryManage(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('inventory_admin')) {
+            return response()->json(['message' => 'Нет доступа к управлению инвентарём.'], 403);
+        }
+
+        $items = InvNumbers::query()
+            ->with(['store.type', 'employee'])
+            ->whereNull('date_out')
+            ->orderBy('employees_id')
+            ->orderByDesc('date_in')
+            ->limit(1000)
+            ->get();
+
+        return response()->json([
+            'items' => $items->map(function (InvNumbers $item) {
+                return [
+                    'id' => (int) $item->id,
+                    'employee_id' => (int) $item->employees_id,
+                    'employee_fio' => (string) optional($item->employee)->fio,
+                    'name' => (string) optional($item->store)->name,
+                    'inventory_number' => (string) ($item->number ?? ''),
+                    'type' => (string) optional(optional($item->store)->type)->name,
+                    'room' => (string) ($item->room ?? ''),
+                    'date_in' => (string) ($item->date_in ?? ''),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Список сотрудников.
+     * GET /api/mobile/employees
+     */
+    public function employeesList(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('employees_manage')) {
+            return response()->json(['message' => 'Нет доступа к сотрудникам.'], 403);
+        }
+
+        $items = Employee::query()
+            ->with(['role:id,name', 'group:id,name'])
+            ->orderBy('fio')
+            ->limit(500)
+            ->get(['id', 'login', 'fio', 'email', 'active', 'role_id', 'group_id']);
+
+        return response()->json([
+            'items' => $items->map(function (Employee $row) {
+                return [
+                    'id' => (int) $row->id,
+                    'login' => (string) $row->login,
+                    'fio' => (string) $row->fio,
+                    'email' => (string) $row->email,
+                    'active' => (int) $row->active === 1,
+                    'role_id' => $row->role_id ? (int) $row->role_id : 0,
+                    'role_name' => (string) optional($row->role)->name,
+                    'group_id' => $row->group_id ? (int) $row->group_id : 0,
+                    'group_name' => (string) optional($row->group)->name,
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Активация/деактивация сотрудника.
+     * PATCH /api/mobile/employees/{id}/active/{state}
+     */
+    public function employeesSetActive(Request $request, int $id, int $state): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('employees_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению сотрудниками.'], 403);
+        }
+
+        $target = Employee::query()->find($id);
+        if (! $target) {
+            return response()->json(['message' => 'Сотрудник не найден.'], 404);
+        }
+
+        $target->active = $state === 1 ? 1 : 0;
+        $target->save();
+
+        return response()->json([
+            'message' => 'Статус сотрудника обновлён.',
+            'id' => (int) $target->id,
+            'active' => (int) $target->active === 1,
+        ]);
+    }
+
+    /**
+     * Назначение роли и/или группы сотруднику.
+     * PATCH /api/mobile/employees/{id}/assign
+     */
+    public function employeesAssign(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('employees_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению сотрудниками.'], 403);
+        }
+
+        $target = Employee::query()->find($id);
+        if (! $target) {
+            return response()->json(['message' => 'Сотрудник не найден.'], 404);
+        }
+
+        $validated = $request->validate([
+            'role_id' => ['nullable', 'integer', 'min:1', 'exists:roles,id'],
+            'group_id' => ['nullable', 'integer', 'min:1', 'exists:groups,id'],
+        ]);
+
+        if (array_key_exists('role_id', $validated)) {
+            $target->role_id = $validated['role_id'] ? (int) $validated['role_id'] : null;
+        }
+        if (array_key_exists('group_id', $validated)) {
+            $target->group_id = $validated['group_id'] ? (int) $validated['group_id'] : null;
+        }
+
+        $target->save();
+        $target->load(['role:id,name', 'group:id,name']);
+
+        return response()->json([
+            'message' => 'Назначения сотрудника обновлены.',
+            'id' => (int) $target->id,
+            'role_id' => $target->role_id ? (int) $target->role_id : 0,
+            'role_name' => (string) optional($target->role)->name,
+            'group_id' => $target->group_id ? (int) $target->group_id : 0,
+            'group_name' => (string) optional($target->group)->name,
+        ]);
+    }
+
+    /**
+     * Список ролей.
+     * GET /api/mobile/roles
+     */
+    public function rolesList(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage') && ! $employee->canAccessPage('employees_manage')) {
+            return response()->json(['message' => 'Нет доступа к ролям.'], 403);
+        }
+
+        $roles = Roles::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'is_system']);
+
+        return response()->json([
+            'items' => $roles->map(function (Roles $role) {
+                return [
+                    'id' => (int) $role->id,
+                    'name' => (string) $role->name,
+                    'is_system' => (bool) $role->is_system,
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Создание роли.
+     * POST /api/mobile/roles
+     */
+    public function rolesCreate(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению ролями.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $role = Roles::query()->create([
+            'name' => (string) $validated['name'],
+            'is_system' => false,
+        ]);
+
+        return response()->json([
+            'message' => 'Роль создана.',
+            'id' => (int) $role->id,
+        ], 201);
+    }
+
+    /**
+     * Обновление роли.
+     * PATCH /api/mobile/roles/{id}
+     */
+    public function rolesUpdate(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению ролями.'], 403);
+        }
+
+        $role = Roles::query()->find($id);
+        if (! $role) {
+            return response()->json(['message' => 'Роль не найдена.'], 404);
+        }
+        if ((bool) $role->is_system) {
+            return response()->json(['message' => 'Системную роль нельзя изменить.'], 422);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $role->name = (string) $validated['name'];
+        $role->save();
+
+        return response()->json([
+            'message' => 'Роль обновлена.',
+            'id' => (int) $role->id,
+        ]);
+    }
+
+    /**
+     * Удаление роли.
+     * DELETE /api/mobile/roles/{id}
+     */
+    public function rolesDelete(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению ролями.'], 403);
+        }
+
+        $role = Roles::query()->find($id);
+        if (! $role) {
+            return response()->json(['message' => 'Роль не найдена.'], 404);
+        }
+        if ((bool) $role->is_system) {
+            return response()->json(['message' => 'Системную роль нельзя удалить.'], 422);
+        }
+        if ($role->employees()->exists()) {
+            return response()->json(['message' => 'Нельзя удалить роль, к которой привязаны сотрудники.'], 422);
+        }
+
+        $role->delete();
+        return response()->json([
+            'message' => 'Роль удалена.',
+            'id' => $id,
+        ]);
+    }
+
+    /**
+     * Права роли для редактора.
+     * GET /api/mobile/roles/{id}/permissions
+     */
+    public function rolesPermissions(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению ролями.'], 403);
+        }
+
+        $role = Roles::query()->with('pagePermissions:id,role_id,page_key')->find($id);
+        if (! $role) {
+            return response()->json(['message' => 'Роль не найдена.'], 404);
+        }
+
+        $labels = PageAccess::allLabels();
+        $selected = $role->pagePermissions->pluck('page_key')->map(fn ($v) => (string) $v)->all();
+
+        $options = [];
+        foreach ($labels as $key => $label) {
+            $options[] = [
+                'key' => (string) $key,
+                'label' => (string) $label,
+            ];
+        }
+
+        return response()->json([
+            'role' => [
+                'id' => (int) $role->id,
+                'name' => (string) $role->name,
+                'is_system' => (bool) $role->is_system,
+            ],
+            'options' => $options,
+            'selected' => array_values($selected),
+        ]);
+    }
+
+    /**
+     * Сохранение прав роли.
+     * POST /api/mobile/roles/{id}/permissions
+     */
+    public function rolesPermissionsSave(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('roles_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению ролями.'], 403);
+        }
+
+        $role = Roles::query()->find($id);
+        if (! $role) {
+            return response()->json(['message' => 'Роль не найдена.'], 404);
+        }
+        if ((bool) $role->is_system) {
+            return response()->json(['message' => 'Системной роли нельзя менять права.'], 422);
+        }
+
+        $validated = $request->validate([
+            'permissions' => ['array'],
+            'permissions.*' => ['string'],
+        ]);
+
+        $requested = array_values(array_unique(array_map('strval', $validated['permissions'] ?? [])));
+        $allowed = array_keys(PageAccess::allLabels());
+        $allowedMap = array_fill_keys($allowed, true);
+        $final = array_values(array_filter($requested, static fn ($k) => isset($allowedMap[$k])));
+
+        RolePagePermission::query()->where('role_id', $role->id)->delete();
+        if ($final !== []) {
+            $rows = [];
+            foreach ($final as $key) {
+                $rows[] = ['role_id' => $role->id, 'page_key' => $key];
+            }
+            RolePagePermission::query()->insert($rows);
+        }
+
+        return response()->json([
+            'message' => 'Права роли обновлены.',
+            'id' => (int) $role->id,
+            'count' => count($final),
+        ]);
+    }
+
+    /**
+     * Список групп.
+     * GET /api/mobile/groups
+     */
+    public function groupsList(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('groups_manage') && ! $employee->canAccessPage('employees_manage')) {
+            return response()->json(['message' => 'Нет доступа к группам.'], 403);
+        }
+
+        $groups = Groups::query()->withCount('students')->orderBy('name')->get(['id', 'name', 'description']);
+
+        return response()->json([
+            'items' => $groups->map(function (Groups $group) {
+                return [
+                    'id' => (int) $group->id,
+                    'name' => (string) $group->name,
+                    'description' => (string) ($group->description ?? ''),
+                    'students_count' => (int) ($group->students_count ?? 0),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /**
+     * Создание группы.
+     * POST /api/mobile/groups
+     */
+    public function groupsCreate(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('groups_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению группами.'], 403);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $group = Groups::query()->create([
+            'name' => (string) $validated['name'],
+            'description' => (string) ($validated['description'] ?? ''),
+        ]);
+
+        return response()->json([
+            'message' => 'Группа создана.',
+            'id' => (int) $group->id,
+        ], 201);
+    }
+
+    /**
+     * Обновление группы.
+     * PATCH /api/mobile/groups/{id}
+     */
+    public function groupsUpdate(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('groups_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению группами.'], 403);
+        }
+
+        $group = Groups::query()->find($id);
+        if (! $group) {
+            return response()->json(['message' => 'Группа не найдена.'], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $group->name = (string) $validated['name'];
+        $group->description = (string) ($validated['description'] ?? '');
+        $group->save();
+
+        return response()->json([
+            'message' => 'Группа обновлена.',
+            'id' => (int) $group->id,
+        ]);
+    }
+
+    /**
+     * Удаление группы.
+     * DELETE /api/mobile/groups/{id}
+     */
+    public function groupsDelete(Request $request, int $id): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('groups_manage')) {
+            return response()->json(['message' => 'Нет доступа к управлению группами.'], 403);
+        }
+
+        $group = Groups::query()->find($id);
+        if (! $group) {
+            return response()->json(['message' => 'Группа не найдена.'], 404);
+        }
+
+        Employee::query()->where('group_id', $group->id)->update(['group_id' => null]);
+        $group->delete();
+
+        return response()->json([
+            'message' => 'Группа удалена.',
+            'id' => $id,
+        ]);
+    }
+
+    /**
+     * Общие настройки.
+     * GET /api/mobile/settings/general
+     */
+    public function settingsGeneral(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('settings')) {
+            return response()->json(['message' => 'Нет доступа к настройкам.'], 403);
+        }
+
+        $settings = Settings::query()->find(1);
+        if (! $settings) {
+            return response()->json(['message' => 'Настройки не найдены.'], 404);
+        }
+
+        return response()->json([
+            'title' => (string) ($settings->title ?? ''),
+            'disable_reason' => (string) ($settings->disable_reason ?? ''),
+            'is_enabled' => (int) ($settings->is_enabled ?? 1) === 1,
+        ]);
+    }
+
+    /**
+     * Сохранение общих настроек.
+     * POST /api/mobile/settings/general
+     */
+    public function settingsGeneralSave(Request $request): JsonResponse
+    {
+        $employee = $this->resolveEmployeeFromToken($request);
+        if (! $employee) {
+            return response()->json(['message' => 'Необходима авторизация.'], 401);
+        }
+        if (! $employee->canAccessPage('settings')) {
+            return response()->json(['message' => 'Нет доступа к настройкам.'], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'disable_reason' => ['nullable', 'string', 'max:1000'],
+            'is_enabled' => ['required', 'boolean'],
+        ]);
+
+        $settings = Settings::query()->find(1);
+        if (! $settings) {
+            return response()->json(['message' => 'Настройки не найдены.'], 404);
+        }
+
+        $settings->title = (string) $validated['title'];
+        $settings->disable_reason = (string) ($validated['disable_reason'] ?? '');
+        $settings->is_enabled = $validated['is_enabled'] ? 1 : 0;
+        $settings->save();
+
+        return response()->json([
+            'message' => 'Настройки сохранены.',
         ]);
     }
 
