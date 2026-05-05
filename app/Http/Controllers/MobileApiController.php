@@ -1357,6 +1357,11 @@ class MobileApiController extends Controller
 
         $attrs = $employee->getAttributes();
 
+        $permissions = [];
+        foreach (array_keys(PageAccess::allLabels()) as $key) {
+            $permissions[$key] = $employee->canAccessPage((string) $key);
+        }
+
         return [
             'id' => $employee->id,
             'login' => $employee->login,
@@ -1383,12 +1388,7 @@ class MobileApiController extends Controller
             'chair_id' => $employee->chair_id,
             'chair_name' => $employee->chair?->name,
             'email_notifications' => (bool) $employee->email_notifications,
-            'permissions' => [
-                'schedule_my' => $employee->canAccessPage('schedule_my'),
-                'student_tests' => $employee->canAccessPage('student_tests'),
-                'tests_admin' => $employee->canAccessPage('tests_admin'),
-                'tests_stats' => $employee->canAccessPage('tests_stats'),
-            ],
+            'permissions' => $permissions,
         ];
     }
 
