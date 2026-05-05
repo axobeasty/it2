@@ -1,0 +1,34 @@
+<Window x:Class="ItMaster.Desktop.Wpf.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="IT-Master Desktop (WPF) - Вход"
+        Height="360" Width="560"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="API Base URL"/>
+        <DockPanel Grid.Row="1" Margin="0,6,0,12">
+            <Button x:Name="ApplyApiButton" Content="Применить" Width="100" DockPanel.Dock="Right" Margin="8,0,0,0" Click="ApplyApiButton_OnClick"/>
+            <TextBox x:Name="ApiUrlTextBox"/>
+        </DockPanel>
+
+        <TextBlock Grid.Row="2" Text="Логин"/>
+        <TextBox x:Name="LoginTextBox" Grid.Row="3" Margin="0,6,0,12"/>
+
+        <TextBlock Grid.Row="4" Text="Пароль"/>
+        <StackPanel Grid.Row="5">
+            <PasswordBox x:Name="PasswordTextBox" Margin="0,6,0,12" KeyDown="PasswordTextBox_OnKeyDown"/>
+            <Button x:Name="LoginButton" Content="Войти" Height="34" Click="LoginButton_OnClick"/>
+            <TextBlock x:Name="StatusTextBlock" Foreground="DarkRed" Margin="0,10,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+    </Grid>
+</Window>
